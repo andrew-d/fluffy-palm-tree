@@ -217,11 +217,6 @@ func MoEExperts(
 	if nWorkers < 1 {
 		nWorkers = 1
 	}
-	// Experiment: cut MoE workers to half of GOMAXPROCS to test if cache
-	// contention on the 128-expert × 5 MB weight stream is the bottleneck.
-	if nWorkers > 4 {
-		nWorkers = 4
-	}
 
 	// Each token's accum row can be written by up to topK different experts,
 	// each potentially on a different worker. Shard accum per worker and
