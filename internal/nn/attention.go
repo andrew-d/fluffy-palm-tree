@@ -200,6 +200,11 @@ func GQAAttentionWithSinks(
 
 	// Each head writes to its own [T, headDim] slice of attnOut, so fan-out
 	// across heads is lock-free. scores is a per-goroutine scratch buffer.
+	//
+	// With a symmetric sliding window of radius (window-1), valid keys for
+	// query i live in [jLo, jHi). Hoisting those bounds out of the inner
+	// loops skips both the per-j abs/mask branch and the IsInf check in the
+	// softmax pass, and shrinks the exp/v-accumulate loops from T to ≤2*window.
 	processHead := func(h int, scores []float32) {
 		kvIdx := h / group
 		sinkLogit := sinks[h]
@@ -208,19 +213,18 @@ func GQAAttentionWithSinks(
 			qOff := (i*numQ + h) * headDim
 			qRow := q[qOff : qOff+headDim]
 
-			// Compute raw logits s[j] = <q_row, k[j, kvIdx, :]>.
-			// Apply the sliding window mask directly: entries outside the
-			// window are -inf.
+			jLo := i - window + 1
+			if jLo < 0 {
+				jLo = 0
+			}
+			jHi := i + window
+			if jHi > T {
+				jHi = T
+			}
+
+			// Raw logits s[j] = <q_row, k[j, kvIdx, :]>, only for valid j.
 			maxLogit := float32(math.Inf(-1))
-			for j := 0; j < T; j++ {
-				d := i - j
-				if d < 0 {
-					d = -d
-				}
-				if d > window-1 {
-					scores[j] = float32(math.Inf(-1))
-					continue
-				}
+			for j := jLo; j < jHi; j++ {
 				kOff := (j*numKV + kvIdx) * headDim
 				kRow := k[kOff : kOff+headDim]
 				var s float32
@@ -238,20 +242,13 @@ func GQAAttentionWithSinks(
 			if sinkLogit > maxLogit {
 				maxLogit = sinkLogit
 			}
-			// If every candidate is -inf (shouldn't happen with symmetric
-			// windows + sink, since the sink is finite), fall back to 0.
-			if math.IsInf(float64(maxLogit), -1) {
-				maxLogit = 0
-			}
+			// Windowed attention with a sink logit always has at least one
+			// finite candidate, so the -inf fallback from the original is
+			// only reachable when T==0; defensive check is unnecessary here.
 
-			// Softmax in fp32; accumulate the denominator over the T visible
-			// keys plus the sink logit.
+			// Softmax in fp32 over [jLo, jHi); fp64 denom to minimize roundoff.
 			var denom float64
-			for j := 0; j < T; j++ {
-				if math.IsInf(float64(scores[j]), -1) {
-					scores[j] = 0
-					continue
-				}
+			for j := jLo; j < jHi; j++ {
 				e := math.Exp(float64(scores[j] - maxLogit))
 				scores[j] = float32(e)
 				denom += e
@@ -260,17 +257,17 @@ func GQAAttentionWithSinks(
 			// Normalize — the sink column is intentionally dropped after
 			// normalization, leaving it as "lost mass".
 			inv := 1.0 / denom
-			for j := 0; j < T; j++ {
+			for j := jLo; j < jHi; j++ {
 				scores[j] = float32(float64(scores[j]) * inv)
 			}
 
-			// attnOut[h, i, :] = sum_j scores[j] * v[j, kvIdx, :]
+			// attnOut[h, i, :] = sum_{j in [jLo,jHi)} scores[j] * v[j, kvIdx, :]
 			dstOff := (h*T + i) * headDim
 			dst := attnOut[dstOff : dstOff+headDim]
 			for d2 := 0; d2 < headDim; d2++ {
 				dst[d2] = 0
 			}
-			for j := 0; j < T; j++ {
+			for j := jLo; j < jHi; j++ {
 				w := scores[j]
 				if w == 0 {
 					continue
