@@ -440,7 +440,7 @@ func MoEExperts(
 			}
 		}
 		sort.Slice(order, func(i, j int) bool {
-			return counts[order[i]] > counts[order[j]]
+			return counts[order[i]] < counts[order[j]]
 		})
 		assignments := make([][]int, nWorkers)
 		for i, e := range order {
