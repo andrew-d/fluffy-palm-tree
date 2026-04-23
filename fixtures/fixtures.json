@@ -1,0 +1,656 @@
+{
+  "text": "My name is Harry Potter and my email is harry.potter@hogwarts.edu.",
+  "input_ids": [
+    5444,
+    1308,
+    382,
+    23564,
+    45666,
+    326,
+    922,
+    3719,
+    382,
+    3664,
+    1102,
+    1201,
+    346,
+    399,
+    31,
+    96219,
+    115451,
+    21819,
+    13
+  ],
+  "offsets": [
+    [
+      0,
+      2
+    ],
+    [
+      2,
+      7
+    ],
+    [
+      7,
+      10
+    ],
+    [
+      10,
+      16
+    ],
+    [
+      16,
+      23
+    ],
+    [
+      23,
+      27
+    ],
+    [
+      27,
+      30
+    ],
+    [
+      30,
+      36
+    ],
+    [
+      36,
+      39
+    ],
+    [
+      39,
+      43
+    ],
+    [
+      43,
+      45
+    ],
+    [
+      45,
+      47
+    ],
+    [
+      47,
+      49
+    ],
+    [
+      49,
+      52
+    ],
+    [
+      52,
+      53
+    ],
+    [
+      53,
+      56
+    ],
+    [
+      56,
+      61
+    ],
+    [
+      61,
+      65
+    ],
+    [
+      65,
+      66
+    ]
+  ],
+  "seq_len": 19,
+  "hidden_size": 640,
+  "head_dim": 64,
+  "num_q_heads": 14,
+  "num_kv_heads": 2,
+  "num_experts": 128,
+  "num_experts_per_tok": 4,
+  "intermediate_size": 640,
+  "rms_norm_eps": 1e-05,
+  "sliding_window": 129,
+  "tensors": [
+    {
+      "name": "embedding",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "embedding.f32.bin"
+    },
+    {
+      "name": "rope_cos",
+      "shape": [
+        1,
+        19,
+        32
+      ],
+      "path": "rope_cos.f32.bin"
+    },
+    {
+      "name": "rope_sin",
+      "shape": [
+        1,
+        19,
+        32
+      ],
+      "path": "rope_sin.f32.bin"
+    },
+    {
+      "name": "layer0_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer0_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer0_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer0_attn_out.f32.bin"
+    },
+    {
+      "name": "layer0_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer0_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer0_router_logits",
+      "shape": [
+        19,
+        128
+      ],
+      "path": "layer0_router_logits.f32.bin"
+    },
+    {
+      "name": "layer0_router_scores",
+      "shape": [
+        19,
+        4
+      ],
+      "path": "layer0_router_scores.f32.bin"
+    },
+    {
+      "name": "layer0_router_indices",
+      "shape": [
+        19,
+        4
+      ],
+      "path": "layer0_router_indices.f32.bin"
+    },
+    {
+      "name": "layer0_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer0_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer0_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer0_out.f32.bin"
+    },
+    {
+      "name": "layer1_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer1_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer1_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer1_attn_out.f32.bin"
+    },
+    {
+      "name": "layer1_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer1_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer1_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer1_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer1_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer1_out.f32.bin"
+    },
+    {
+      "name": "layer2_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer2_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer2_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer2_attn_out.f32.bin"
+    },
+    {
+      "name": "layer2_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer2_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer2_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer2_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer2_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer2_out.f32.bin"
+    },
+    {
+      "name": "layer3_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer3_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer3_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer3_attn_out.f32.bin"
+    },
+    {
+      "name": "layer3_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer3_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer3_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer3_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer3_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer3_out.f32.bin"
+    },
+    {
+      "name": "layer4_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer4_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer4_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer4_attn_out.f32.bin"
+    },
+    {
+      "name": "layer4_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer4_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer4_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer4_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer4_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer4_out.f32.bin"
+    },
+    {
+      "name": "layer5_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer5_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer5_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer5_attn_out.f32.bin"
+    },
+    {
+      "name": "layer5_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer5_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer5_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer5_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer5_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer5_out.f32.bin"
+    },
+    {
+      "name": "layer6_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer6_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer6_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer6_attn_out.f32.bin"
+    },
+    {
+      "name": "layer6_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer6_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer6_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer6_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer6_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer6_out.f32.bin"
+    },
+    {
+      "name": "layer7_pre_attn_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer7_pre_attn_norm.f32.bin"
+    },
+    {
+      "name": "layer7_attn_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer7_attn_out.f32.bin"
+    },
+    {
+      "name": "layer7_pre_mlp_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer7_pre_mlp_norm.f32.bin"
+    },
+    {
+      "name": "layer7_mlp_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer7_mlp_out.f32.bin"
+    },
+    {
+      "name": "layer7_out",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "layer7_out.f32.bin"
+    },
+    {
+      "name": "final_norm",
+      "shape": [
+        1,
+        19,
+        640
+      ],
+      "path": "final_norm.f32.bin"
+    },
+    {
+      "name": "logits",
+      "shape": [
+        19,
+        33
+      ],
+      "path": "logits.f32.bin"
+    },
+    {
+      "name": "probs",
+      "shape": [
+        19,
+        33
+      ],
+      "path": "probs.f32.bin"
+    },
+    {
+      "name": "attention_mask_bias",
+      "shape": [
+        19,
+        19
+      ],
+      "path": "attention_mask_bias.f32.bin"
+    }
+  ],
+  "pred_label_ids": [
+    0,
+    0,
+    0,
+    17,
+    19,
+    0,
+    0,
+    0,
+    0,
+    13,
+    14,
+    14,
+    14,
+    14,
+    14,
+    14,
+    14,
+    15,
+    0
+  ],
+  "pred_labels": [
+    "O",
+    "O",
+    "O",
+    "B-private_person",
+    "E-private_person",
+    "O",
+    "O",
+    "O",
+    "O",
+    "B-private_email",
+    "I-private_email",
+    "I-private_email",
+    "I-private_email",
+    "I-private_email",
+    "I-private_email",
+    "I-private_email",
+    "I-private_email",
+    "E-private_email",
+    "O"
+  ],
+  "pred_scores": [
+    0.9999984502792358,
+    0.9999991655349731,
+    0.9999997615814209,
+    0.999998927116394,
+    0.9999990463256836,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.9999983310699463,
+    0.9999982118606567,
+    1.0,
+    0.9999998807907104,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.9999974966049194,
+    0.9999957084655762
+  ],
+  "id2label": {
+    "0": "O",
+    "1": "B-account_number",
+    "2": "I-account_number",
+    "3": "E-account_number",
+    "4": "S-account_number",
+    "5": "B-private_address",
+    "6": "I-private_address",
+    "7": "E-private_address",
+    "8": "S-private_address",
+    "9": "B-private_date",
+    "10": "I-private_date",
+    "11": "E-private_date",
+    "12": "S-private_date",
+    "13": "B-private_email",
+    "14": "I-private_email",
+    "15": "E-private_email",
+    "16": "S-private_email",
+    "17": "B-private_person",
+    "18": "I-private_person",
+    "19": "E-private_person",
+    "20": "S-private_person",
+    "21": "B-private_phone",
+    "22": "I-private_phone",
+    "23": "E-private_phone",
+    "24": "S-private_phone",
+    "25": "B-private_url",
+    "26": "I-private_url",
+    "27": "E-private_url",
+    "28": "S-private_url",
+    "29": "B-secret",
+    "30": "I-secret",
+    "31": "E-secret",
+    "32": "S-secret"
+  }
+}

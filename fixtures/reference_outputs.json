@@ -1,0 +1,396 @@
+{
+  "per_token": [
+    {
+      "text": "My name is Harry Potter and my email is harry.potter@hogwarts.edu.",
+      "input_ids": [
+        5444,
+        1308,
+        382,
+        23564,
+        45666,
+        326,
+        922,
+        3719,
+        382,
+        3664,
+        1102,
+        1201,
+        346,
+        399,
+        31,
+        96219,
+        115451,
+        21819,
+        13
+      ],
+      "offsets": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          7,
+          10
+        ],
+        [
+          10,
+          16
+        ],
+        [
+          16,
+          23
+        ],
+        [
+          23,
+          27
+        ],
+        [
+          27,
+          30
+        ],
+        [
+          30,
+          36
+        ],
+        [
+          36,
+          39
+        ],
+        [
+          39,
+          43
+        ],
+        [
+          43,
+          45
+        ],
+        [
+          45,
+          47
+        ],
+        [
+          47,
+          49
+        ],
+        [
+          49,
+          52
+        ],
+        [
+          52,
+          53
+        ],
+        [
+          53,
+          56
+        ],
+        [
+          56,
+          61
+        ],
+        [
+          61,
+          65
+        ],
+        [
+          65,
+          66
+        ]
+      ],
+      "pred_label_ids": [
+        0,
+        0,
+        0,
+        17,
+        19,
+        0,
+        0,
+        0,
+        0,
+        13,
+        14,
+        14,
+        14,
+        14,
+        14,
+        14,
+        14,
+        15,
+        0
+      ],
+      "pred_labels": [
+        "O",
+        "O",
+        "O",
+        "B-private_person",
+        "E-private_person",
+        "O",
+        "O",
+        "O",
+        "O",
+        "B-private_email",
+        "I-private_email",
+        "I-private_email",
+        "I-private_email",
+        "I-private_email",
+        "I-private_email",
+        "I-private_email",
+        "I-private_email",
+        "E-private_email",
+        "O"
+      ],
+      "logits_argmax_scores": [
+        0.9999984502792358,
+        0.9999991655349731,
+        0.9999997615814209,
+        0.999998927116394,
+        0.9999990463256836,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9999983310699463,
+        0.9999982118606567,
+        1.0,
+        0.9999998807907104,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.9999974966049194,
+        0.9999957084655762
+      ]
+    },
+    {
+      "text": "My name is Alice Smith",
+      "input_ids": [
+        5444,
+        1308,
+        382,
+        44045,
+        16627
+      ],
+      "offsets": [
+        [
+          0,
+          2
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          7,
+          10
+        ],
+        [
+          10,
+          16
+        ],
+        [
+          16,
+          22
+        ]
+      ],
+      "pred_label_ids": [
+        0,
+        0,
+        0,
+        17,
+        19
+      ],
+      "pred_labels": [
+        "O",
+        "O",
+        "O",
+        "B-private_person",
+        "E-private_person"
+      ],
+      "logits_argmax_scores": [
+        0.9999978542327881,
+        0.9999700784683228,
+        1.0,
+        0.9999994039535522,
+        0.9999899864196777
+      ]
+    },
+    {
+      "text": "Call me at 555-123-4567.",
+      "input_ids": [
+        4701,
+        668,
+        540,
+        220,
+        22275,
+        12,
+        7633,
+        12,
+        19354,
+        22,
+        13
+      ],
+      "offsets": [
+        [
+          0,
+          4
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          7,
+          10
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          15,
+          18
+        ],
+        [
+          18,
+          19
+        ],
+        [
+          19,
+          22
+        ],
+        [
+          22,
+          23
+        ],
+        [
+          23,
+          24
+        ]
+      ],
+      "pred_label_ids": [
+        0,
+        0,
+        0,
+        0,
+        21,
+        22,
+        22,
+        22,
+        22,
+        23,
+        0
+      ],
+      "pred_labels": [
+        "O",
+        "O",
+        "O",
+        "O",
+        "B-private_phone",
+        "I-private_phone",
+        "I-private_phone",
+        "I-private_phone",
+        "I-private_phone",
+        "E-private_phone",
+        "O"
+      ],
+      "logits_argmax_scores": [
+        0.9999951124191284,
+        0.9999312162399292,
+        0.9999997615814209,
+        0.9999991655349731,
+        0.9999990463256836,
+        0.9999992847442627,
+        0.9999995231628418,
+        0.9999998807907104,
+        0.9999996423721313,
+        0.9999974966049194,
+        0.9999990463256836
+      ]
+    }
+  ],
+  "aggregated": [
+    {
+      "text": "My name is Harry Potter and my email is harry.potter@hogwarts.edu.",
+      "entities": [
+        {
+          "entity_group": "private_person",
+          "score": 0.999998927116394,
+          "word": " Harry",
+          "start": 10,
+          "end": 16
+        },
+        {
+          "entity_group": "private_person",
+          "score": 0.9999990463256836,
+          "word": " Potter",
+          "start": 16,
+          "end": 23
+        },
+        {
+          "entity_group": "private_email",
+          "score": 0.9999995827674866,
+          "word": " harry.potter@hogwarts",
+          "start": 39,
+          "end": 61
+        },
+        {
+          "entity_group": "private_email",
+          "score": 0.9999974966049194,
+          "word": ".edu",
+          "start": 61,
+          "end": 65
+        }
+      ]
+    },
+    {
+      "text": "My name is Alice Smith",
+      "entities": [
+        {
+          "entity_group": "private_person",
+          "score": 0.9999994039535522,
+          "word": " Alice",
+          "start": 10,
+          "end": 16
+        },
+        {
+          "entity_group": "private_person",
+          "score": 0.9999899864196777,
+          "word": " Smith",
+          "start": 16,
+          "end": 22
+        }
+      ]
+    },
+    {
+      "text": "Call me at 555-123-4567.",
+      "entities": [
+        {
+          "entity_group": "private_phone",
+          "score": 0.9999994039535522,
+          "word": "555-123-456",
+          "start": 11,
+          "end": 22
+        },
+        {
+          "entity_group": "private_phone",
+          "score": 0.999997615814209,
+          "word": "7",
+          "start": 22,
+          "end": 23
+        }
+      ]
+    }
+  ]
+}
