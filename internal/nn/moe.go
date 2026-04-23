@@ -3,6 +3,7 @@ package nn
 import (
 	"math"
 	"runtime"
+	"sort"
 	"sync"
 )
 
@@ -225,13 +226,13 @@ func MoEExperts(
 		shards[w] = make([]float32, T*D)
 	}
 
-	processExperts := func(workerID, startE, endE int) {
+	processAssigned := func(workerID int, experts []int) {
 		shard := shards[workerID]
 		// Per-worker batch scratch, grown on demand to the largest N we see.
 		var gateUpBatch, gatedBatch, outBatch []float32
 		// Scratch for the per-iteration alpha vectors fed to axpyBatch.
 		var gateAlphas, downAlphas []float32
-		for e := startE; e < endE; e++ {
+		for _, e := range experts {
 			pairs := perExpert[e]
 			n := len(pairs)
 			if n == 0 {
@@ -318,24 +319,44 @@ func MoEExperts(
 	}
 
 	if nWorkers == 1 {
-		processExperts(0, 0, numExperts)
-	} else {
-		var wg sync.WaitGroup
-		chunk := (numExperts + nWorkers - 1) / nWorkers
-		for w := 0; w < nWorkers; w++ {
-			start := w * chunk
-			if start >= numExperts {
-				break
+		assignments := make([][]int, 1)
+		assignments[0] = make([]int, 0, numExperts)
+		for e := 0; e < numExperts; e++ {
+			if counts[e] > 0 {
+				assignments[0] = append(assignments[0], e)
 			}
-			end := start + chunk
-			if end > numExperts {
-				end = numExperts
+		}
+		processAssigned(0, assignments[0])
+	} else {
+		// Sort experts by assigned-token count (desc) and round-robin
+		// them across workers. Prevents one worker from getting all the
+		// heavy experts while another gets empty ones — the naive
+		// contiguous-slab split happened to leave the last worker idle on
+		// skewed router distributions.
+		order := make([]int, 0, numExperts)
+		for e := 0; e < numExperts; e++ {
+			if counts[e] > 0 {
+				order = append(order, e)
+			}
+		}
+		sort.Slice(order, func(i, j int) bool {
+			return counts[order[i]] > counts[order[j]]
+		})
+		assignments := make([][]int, nWorkers)
+		for i, e := range order {
+			w := i % nWorkers
+			assignments[w] = append(assignments[w], e)
+		}
+		var wg sync.WaitGroup
+		for w := 0; w < nWorkers; w++ {
+			if len(assignments[w]) == 0 {
+				continue
 			}
 			wg.Add(1)
-			go func(workerID, start, end int) {
+			go func(workerID int, experts []int) {
 				defer wg.Done()
-				processExperts(workerID, start, end)
-			}(w, start, end)
+				processAssigned(workerID, experts)
+			}(w, assignments[w])
 		}
 		wg.Wait()
 	}
