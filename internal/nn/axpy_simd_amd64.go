@@ -470,6 +470,53 @@ func dotBatch8(w []float32, xs [8][]float32) [8]float32 {
 	return result
 }
 
+// dotBatch16 is dotBatch8 with 16 parallel accumulators. Pushes the
+// wRow-sharing trick to the edge of the ZMM budget (16 accumulators + 1
+// wv + 1 scratch).
+func dotBatch16(w []float32, xs [16][]float32) [16]float32 {
+	var acc [16]archsimd.Float32x16
+	for s := 0; s < 16; s++ {
+		acc[s] = archsimd.BroadcastFloat32x16(0)
+	}
+	n := len(w)
+	i := 0
+	for ; i+16 <= n; i += 16 {
+		wv := archsimd.LoadFloat32x16Slice(w[i:])
+		acc[0] = archsimd.LoadFloat32x16Slice(xs[0][i:]).MulAdd(wv, acc[0])
+		acc[1] = archsimd.LoadFloat32x16Slice(xs[1][i:]).MulAdd(wv, acc[1])
+		acc[2] = archsimd.LoadFloat32x16Slice(xs[2][i:]).MulAdd(wv, acc[2])
+		acc[3] = archsimd.LoadFloat32x16Slice(xs[3][i:]).MulAdd(wv, acc[3])
+		acc[4] = archsimd.LoadFloat32x16Slice(xs[4][i:]).MulAdd(wv, acc[4])
+		acc[5] = archsimd.LoadFloat32x16Slice(xs[5][i:]).MulAdd(wv, acc[5])
+		acc[6] = archsimd.LoadFloat32x16Slice(xs[6][i:]).MulAdd(wv, acc[6])
+		acc[7] = archsimd.LoadFloat32x16Slice(xs[7][i:]).MulAdd(wv, acc[7])
+		acc[8] = archsimd.LoadFloat32x16Slice(xs[8][i:]).MulAdd(wv, acc[8])
+		acc[9] = archsimd.LoadFloat32x16Slice(xs[9][i:]).MulAdd(wv, acc[9])
+		acc[10] = archsimd.LoadFloat32x16Slice(xs[10][i:]).MulAdd(wv, acc[10])
+		acc[11] = archsimd.LoadFloat32x16Slice(xs[11][i:]).MulAdd(wv, acc[11])
+		acc[12] = archsimd.LoadFloat32x16Slice(xs[12][i:]).MulAdd(wv, acc[12])
+		acc[13] = archsimd.LoadFloat32x16Slice(xs[13][i:]).MulAdd(wv, acc[13])
+		acc[14] = archsimd.LoadFloat32x16Slice(xs[14][i:]).MulAdd(wv, acc[14])
+		acc[15] = archsimd.LoadFloat32x16Slice(xs[15][i:]).MulAdd(wv, acc[15])
+	}
+	var result [16]float32
+	for s := 0; s < 16; s++ {
+		var lanes [16]float32
+		acc[s].Store(&lanes)
+		result[s] = (((lanes[0]+lanes[1])+(lanes[2]+lanes[3]))+
+			((lanes[4]+lanes[5])+(lanes[6]+lanes[7]))) +
+			(((lanes[8]+lanes[9])+(lanes[10]+lanes[11]))+
+				((lanes[12]+lanes[13])+(lanes[14]+lanes[15])))
+	}
+	for ; i < n; i++ {
+		wi := w[i]
+		for s := 0; s < 16; s++ {
+			result[s] += xs[s][i] * wi
+		}
+	}
+	return result
+}
+
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +
