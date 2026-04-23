@@ -3,7 +3,11 @@
 // flat `[]float32` buffers.
 package nn
 
-import "math"
+import (
+	"math"
+	"runtime"
+	"sync"
+)
 
 // RMSNorm applies `rsqrt(mean(x^2) + eps) * x * weight` row-wise over the
 // last dimension, matching the HuggingFace gpt_oss layer-norm:
@@ -29,7 +33,7 @@ func RMSNorm(x []float32, weight []float32, T, D int, eps float32) []float32 {
 	}
 	out := make([]float32, T*D)
 	epsd := float64(eps)
-	for t := 0; t < T; t++ {
+	processRow := func(t int) {
 		row := x[t*D : (t+1)*D]
 		// Mean of squares in fp64 to keep the reduction precise; the final
 		// per-element multiply is still in fp32.
@@ -44,6 +48,40 @@ func RMSNorm(x []float32, weight []float32, T, D int, eps float32) []float32 {
 			dst[i] = float32(float64(row[i]) * rms * float64(weight[i]))
 		}
 	}
+
+	// Per-token rows are independent; fan out across workers. Called 2×
+	// per layer × 8 layers = 16 times per forward, so even a small gain
+	// compounds.
+	nWorkers := runtime.GOMAXPROCS(0)
+	if nWorkers > T {
+		nWorkers = T
+	}
+	if nWorkers <= 1 {
+		for t := 0; t < T; t++ {
+			processRow(t)
+		}
+		return out
+	}
+	var wg sync.WaitGroup
+	chunk := (T + nWorkers - 1) / nWorkers
+	for w := 0; w < nWorkers; w++ {
+		start := w * chunk
+		if start >= T {
+			break
+		}
+		end := start + chunk
+		if end > T {
+			end = T
+		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			for t := start; t < end; t++ {
+				processRow(t)
+			}
+		}(start, end)
+	}
+	wg.Wait()
 	return out
 }
 
