@@ -152,19 +152,6 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
-// dotBatch16: scalar fallback of the 16-token batched dot product.
-func dotBatch16(w []float32, xs [16][]float32) [16]float32 {
-	var result [16]float32
-	n := len(w)
-	for i := 0; i < n; i++ {
-		wi := w[i]
-		for s := 0; s < 16; s++ {
-			result[s] += xs[s][i] * wi
-		}
-	}
-	return result
-}
-
 // dotBatch8: scalar fallback of the 8-token batched dot product.
 func dotBatch8(w []float32, xs [8][]float32) [8]float32 {
 	var result [8]float32

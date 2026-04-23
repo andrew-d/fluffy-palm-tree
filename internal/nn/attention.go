@@ -48,17 +48,6 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 				bias = b[o]
 			}
 			t := 0
-			for ; t+16 <= T; t += 16 {
-				var xs [16][]float32
-				for s := 0; s < 16; s++ {
-					ts := t + s
-					xs[s] = x[ts*in : (ts+1)*in]
-				}
-				r := dotBatch16(wrow, xs)
-				for s := 0; s < 16; s++ {
-					y[(t+s)*out+o] = r[s] + bias
-				}
-			}
 			for ; t+8 <= T; t += 8 {
 				var xs [8][]float32
 				for s := 0; s < 8; s++ {
