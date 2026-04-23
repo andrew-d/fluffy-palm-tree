@@ -69,8 +69,16 @@ func fastExp16(x archsimd.Float32x16) archsimd.Float32x16 {
 	p = p.MulAdd(r, one)
 	p = p.MulAdd(r, one)
 
+	// Pack (n+127) into the fp32 exponent field. Clamp to [0, 254] so
+	// lanes that would underflow (n < -127) produce +0 instead of wrapping
+	// into the sign bit, and lanes that would overflow (n > 127) produce
+	// the largest finite 2^n instead of NaN. This is the correctness
+	// delta that softmax amplifies when arg << 0 for masked positions.
 	bias := archsimd.BroadcastInt32x16(127)
-	pow2 := nInt.Add(bias).ShiftAllLeft(23).AsFloat32x16()
+	zero := archsimd.BroadcastInt32x16(0)
+	maxExp := archsimd.BroadcastInt32x16(254)
+	nShifted := nInt.Add(bias).Max(zero).Min(maxExp)
+	pow2 := nShifted.ShiftAllLeft(23).AsFloat32x16()
 
 	return p.Mul(pow2)
 }
