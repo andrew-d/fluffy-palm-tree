@@ -176,12 +176,29 @@ func MoEExperts(
 	// showed we were DRAM-bandwidth-bound on Wu/Wd reads — this brings the
 	// per-layer weight traffic from ~5 GB down to ~0.6 GB.
 
-	// Gather (tokenIdx, weight) pairs per expert.
+	// Gather (tokenIdx, weight) pairs per expert. Two-pass so each
+	// perExpert[e] is allocated exactly once at the right capacity and
+	// no grow-and-copy happens in the append loop — was responsible for
+	// ~1K allocs/forward.
 	type pair struct {
 		t      int
 		weight float32
 	}
+	counts := make([]int, numExperts)
+	for t := 0; t < T; t++ {
+		for kPos := 0; kPos < topK; kPos++ {
+			e := routerIndices[t*topK+kPos]
+			if e >= 0 && e < numExperts {
+				counts[e]++
+			}
+		}
+	}
 	perExpert := make([][]pair, numExperts)
+	for e, c := range counts {
+		if c > 0 {
+			perExpert[e] = make([]pair, 0, c)
+		}
+	}
 	for t := 0; t < T; t++ {
 		for kPos := 0; kPos < topK; kPos++ {
 			e := routerIndices[t*topK+kPos]
