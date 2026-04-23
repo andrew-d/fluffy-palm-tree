@@ -8,3 +8,5 @@ __pycache__/
 autoresearch-results.tsv
 /model
 openai-privacy.test
+autoresearch-progress.png
+default.pgo
