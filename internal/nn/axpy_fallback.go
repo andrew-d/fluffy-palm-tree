@@ -152,6 +152,32 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
+// moeGemmTile4x4: scalar fallback of the BLIS-style 4×64 C-tile MoE GEMM.
+func moeGemmTile4x4(
+	A []float32, a0, a1, a2, a3, kStride int,
+	B []float32, bBase, bStride int,
+	bias []float32, j0 int,
+	K int,
+	C []float32, cBase, cStride int,
+) {
+	aBases := [4]int{a0, a1, a2, a3}
+	cOffs := [4]int{cBase, cBase + cStride, cBase + 2*cStride, cBase + 3*cStride}
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 64; j++ {
+			C[cOffs[i]+j0+j] = bias[j0+j]
+		}
+	}
+	for k := 0; k < K; k++ {
+		for i := 0; i < 4; i++ {
+			a := A[aBases[i]+k*kStride]
+			rowBase := bBase + k*bStride + j0
+			for j := 0; j < 64; j++ {
+				C[cOffs[i]+j0+j] += a * B[rowBase+j]
+			}
+		}
+	}
+}
+
 // linearTile4x4: scalar fallback of the 4×4 C-tile matmul kernel.
 func linearTile4x4(x []float32, W []float32, y []float32, in, out, tOff, oOff int, bias []float32) {
 	for i := 0; i < 4; i++ {
