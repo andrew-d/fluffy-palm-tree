@@ -198,9 +198,9 @@ func GQAAttentionWithSinks(
 	// as [numQ, T, headDim] row-major.
 	attnOut := make([]float32, numQ*T*headDim)
 
-	// Scratch buffers reused across heads/rows.
-	scores := make([]float32, T) // per-row attention logits against all T keys
-	for h := 0; h < numQ; h++ {
+	// Each head writes to its own [T, headDim] slice of attnOut, so fan-out
+	// across heads is lock-free. scores is a per-goroutine scratch buffer.
+	processHead := func(h int, scores []float32) {
 		kvIdx := h / group
 		sinkLogit := sinks[h]
 		for i := 0; i < T; i++ {
@@ -282,6 +282,39 @@ func GQAAttentionWithSinks(
 				}
 			}
 		}
+	}
+
+	nWorkers := runtime.GOMAXPROCS(0)
+	if nWorkers > numQ {
+		nWorkers = numQ
+	}
+	if nWorkers <= 1 {
+		scores := make([]float32, T)
+		for h := 0; h < numQ; h++ {
+			processHead(h, scores)
+		}
+	} else {
+		var wg sync.WaitGroup
+		chunk := (numQ + nWorkers - 1) / nWorkers
+		for wk := 0; wk < nWorkers; wk++ {
+			start := wk * chunk
+			if start >= numQ {
+				break
+			}
+			end := start + chunk
+			if end > numQ {
+				end = numQ
+			}
+			wg.Add(1)
+			go func(start, end int) {
+				defer wg.Done()
+				scores := make([]float32, T)
+				for h := start; h < end; h++ {
+					processHead(h, scores)
+				}
+			}(start, end)
+		}
+		wg.Wait()
 	}
 
 	// Transpose from [numQ, T, headDim] back to [T, numQ*headDim] row-major
