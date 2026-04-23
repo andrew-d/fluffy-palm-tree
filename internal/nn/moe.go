@@ -202,21 +202,7 @@ func MoEExperts(
 			}
 
 			// gate = gateUp[:I], up = gateUp[I:]  (concatenated layout)
-			for i := 0; i < I; i++ {
-				g := gateUp[i]
-				u := gateUp[I+i]
-				if g > limit {
-					g = limit
-				}
-				if u > limit {
-					u = limit
-				} else if u < -limit {
-					u = -limit
-				}
-				sig := float32(1.0 / (1.0 + math.Exp(-float64(g)*float64(alpha))))
-				glu := g * sig
-				gated[i] = (u + 1) * glu
-			}
+			moeActivation(gateUp, gated, I, limit, alpha)
 
 			// out = gated @ downProj[e] + downBias[e]  # [D]
 			downBase := e * downStride

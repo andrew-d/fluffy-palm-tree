@@ -2,7 +2,10 @@
 
 package nn
 
-import "simd/archsimd"
+import (
+	"math"
+	"simd/archsimd"
+)
 
 // axpy computes y[i] += alpha * x[i] for i in [0, len(x)). Requires
 // len(x) == len(y). The body issues VFMADD231PS via simd/archsimd so a
@@ -34,6 +37,90 @@ func axpy(alpha float32, x, y []float32) {
 	}
 	for ; i < n; i++ {
 		y[i] += alpha * x[i]
+	}
+}
+
+// fastExp16 approximates exp(x) lanewise to ~2-3 ULP for x in roughly
+// [-87, 87]. Outside that range lanes over/underflow normally; for our
+// use the argument is bounded by limit*alpha ≈ ±12.
+//
+// Algorithm: x = n*ln2 + r with n ∈ Z and r ∈ (-ln2/2, ln2/2], so exp(x)
+// = 2^n * exp(r). 2^n comes from packing (n+127) into the fp32 exponent
+// field; exp(r) is a degree-6 Horner polynomial tuned for minimax over
+// the reduced range (the Cephes/Cody-Waite choice).
+func fastExp16(x archsimd.Float32x16) archsimd.Float32x16 {
+	log2e := archsimd.BroadcastFloat32x16(1.4426950408889634)  // 1/ln2
+	ln2 := archsimd.BroadcastFloat32x16(0.6931471805599453)    // ln2
+	nRound := x.Mul(log2e).RoundToEvenScaled(0)
+	nInt := nRound.ConvertToInt32()
+	r := x.Sub(nRound.Mul(ln2))
+
+	c6 := archsimd.BroadcastFloat32x16(1.0 / 720)
+	c5 := archsimd.BroadcastFloat32x16(1.0 / 120)
+	c4 := archsimd.BroadcastFloat32x16(1.0 / 24)
+	c3 := archsimd.BroadcastFloat32x16(1.0 / 6)
+	c2 := archsimd.BroadcastFloat32x16(1.0 / 2)
+	one := archsimd.BroadcastFloat32x16(1.0)
+
+	p := c6.MulAdd(r, c5)
+	p = p.MulAdd(r, c4)
+	p = p.MulAdd(r, c3)
+	p = p.MulAdd(r, c2)
+	p = p.MulAdd(r, one)
+	p = p.MulAdd(r, one)
+
+	bias := archsimd.BroadcastInt32x16(127)
+	pow2 := nInt.Add(bias).ShiftAllLeft(23).AsFloat32x16()
+
+	return p.Mul(pow2)
+}
+
+// moeActivation computes the Quick-GELU-gated GLU activation used inside
+// MoEExperts:
+//
+//	for i in [0, I):
+//	    g = min(gateUp[i], limit)
+//	    u = clamp(gateUp[I+i], -limit, limit)
+//	    sig = 1 / (1 + exp(-g*alpha))
+//	    gated[i] = (u + 1) * g * sig
+//
+// Vectorized with fastExp16 so a single Float32x16 pass covers what used
+// to be 16 scalar math.archExp calls.
+func moeActivation(gateUp, gated []float32, I int, limit, alpha float32) {
+	if len(gateUp) < 2*I || len(gated) < I {
+		panic("moeActivation: length mismatch")
+	}
+	limitV := archsimd.BroadcastFloat32x16(limit)
+	negLimitV := archsimd.BroadcastFloat32x16(-limit)
+	negAlphaV := archsimd.BroadcastFloat32x16(-alpha)
+	oneV := archsimd.BroadcastFloat32x16(1.0)
+
+	i := 0
+	for ; i+16 <= I; i += 16 {
+		g := archsimd.LoadFloat32x16Slice(gateUp[i:]).Min(limitV)
+		u := archsimd.LoadFloat32x16Slice(gateUp[I+i:]).Max(negLimitV).Min(limitV)
+
+		e := fastExp16(g.Mul(negAlphaV))
+		sig := oneV.Div(oneV.Add(e))
+		glu := g.Mul(sig)
+		out := u.Add(oneV).Mul(glu)
+		out.StoreSlice(gated[i:])
+	}
+	// Scalar tail (uncommon — I=640 is divisible by 16 on the current model).
+	for ; i < I; i++ {
+		g := gateUp[i]
+		u := gateUp[I+i]
+		if g > limit {
+			g = limit
+		}
+		if u > limit {
+			u = limit
+		} else if u < -limit {
+			u = -limit
+		}
+		sig := float32(1.0 / (1.0 + math.Exp(-float64(g)*float64(alpha))))
+		glu := g * sig
+		gated[i] = (u + 1) * glu
 	}
 }
 

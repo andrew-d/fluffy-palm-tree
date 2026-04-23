@@ -2,6 +2,30 @@
 
 package nn
 
+import "math"
+
+// moeActivation: scalar fallback of the SIMD Quick-GELU-GLU activation.
+func moeActivation(gateUp, gated []float32, I int, limit, alpha float32) {
+	if len(gateUp) < 2*I || len(gated) < I {
+		panic("moeActivation: length mismatch")
+	}
+	for i := 0; i < I; i++ {
+		g := gateUp[i]
+		u := gateUp[I+i]
+		if g > limit {
+			g = limit
+		}
+		if u > limit {
+			u = limit
+		} else if u < -limit {
+			u = -limit
+		}
+		sig := float32(1.0 / (1.0 + math.Exp(-float64(g)*float64(alpha))))
+		glu := g * sig
+		gated[i] = (u + 1) * glu
+	}
+}
+
 // axpy: scalar fallback used when goexperiment.simd is off or we're not
 // on amd64. Unrolled by 8 to match the hot-path layout; the SIMD variant
 // in axpy_simd_amd64.go is drop-in equivalent.
