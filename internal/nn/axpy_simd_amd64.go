@@ -550,56 +550,6 @@ func linearTile4x4(x []float32, W []float32, y []float32, in, out, tOff, oOff in
 	y[(tOff+3)*out+oOff+3] = hsum(a33) + b3
 }
 
-// moeGemmTile4x2 is a narrower version of the BLIS tile (4 tokens × 32
-// output lanes, 8 Float32x16 accumulators). Less register pressure than
-// a 4×4 tile (~14 ZMMs peak vs ~24), giving Go's register allocator more
-// breathing room. Each K step: 2 B-loads + 4 A-broadcasts + 8 FMAs.
-func moeGemmTile4x2(
-	A []float32, a0, a1, a2, a3, kStride int,
-	B []float32, bBase, bStride int,
-	bias []float32, j0 int,
-	K int,
-	C []float32, cBase, cStride int,
-) {
-	bv0 := archsimd.LoadFloat32x16Slice(bias[j0:])
-	bv1 := archsimd.LoadFloat32x16Slice(bias[j0+16:])
-	c00, c01 := bv0, bv1
-	c10, c11 := bv0, bv1
-	c20, c21 := bv0, bv1
-	c30, c31 := bv0, bv1
-
-	for k := 0; k < K; k++ {
-		rowBase := bBase + k*bStride + j0
-		wv0 := archsimd.LoadFloat32x16Slice(B[rowBase:])
-		wv1 := archsimd.LoadFloat32x16Slice(B[rowBase+16:])
-		s0 := archsimd.BroadcastFloat32x16(A[a0+k*kStride])
-		s1 := archsimd.BroadcastFloat32x16(A[a1+k*kStride])
-		s2 := archsimd.BroadcastFloat32x16(A[a2+k*kStride])
-		s3 := archsimd.BroadcastFloat32x16(A[a3+k*kStride])
-		c00 = s0.MulAdd(wv0, c00)
-		c01 = s0.MulAdd(wv1, c01)
-		c10 = s1.MulAdd(wv0, c10)
-		c11 = s1.MulAdd(wv1, c11)
-		c20 = s2.MulAdd(wv0, c20)
-		c21 = s2.MulAdd(wv1, c21)
-		c30 = s3.MulAdd(wv0, c30)
-		c31 = s3.MulAdd(wv1, c31)
-	}
-
-	o0 := cBase + j0
-	o1 := cBase + cStride + j0
-	o2 := cBase + 2*cStride + j0
-	o3 := cBase + 3*cStride + j0
-	c00.StoreSlice(C[o0:])
-	c01.StoreSlice(C[o0+16:])
-	c10.StoreSlice(C[o1:])
-	c11.StoreSlice(C[o1+16:])
-	c20.StoreSlice(C[o2:])
-	c21.StoreSlice(C[o2+16:])
-	c30.StoreSlice(C[o3:])
-	c31.StoreSlice(C[o3+16:])
-}
-
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +
