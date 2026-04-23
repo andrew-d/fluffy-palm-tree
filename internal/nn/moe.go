@@ -169,84 +169,154 @@ func MoEExperts(
 	expertStride := D * twoI
 	downStride := I * D
 
-	// Parallelize across tokens. Each token's accumulator row accum[t*D:(t+1)*D]
-	// is written by only one worker, so no locking is needed. The gateUp/gated
-	// scratch buffers are per-worker.
+	// Expert-major dispatch. The per-token loop streamed each expert's
+	// ~5 MB weight set once per assigned token; batching tokens-per-expert
+	// streams it once per expert and reuses it across all N assigned
+	// tokens (~10 on average for T=306, topK=4, 128 experts). Profiling
+	// showed we were DRAM-bandwidth-bound on Wu/Wd reads — this brings the
+	// per-layer weight traffic from ~5 GB down to ~0.6 GB.
+
+	// Gather (tokenIdx, weight) pairs per expert.
+	type pair struct {
+		t      int
+		weight float32
+	}
+	perExpert := make([][]pair, numExperts)
+	for t := 0; t < T; t++ {
+		for kPos := 0; kPos < topK; kPos++ {
+			e := routerIndices[t*topK+kPos]
+			if e < 0 || e >= numExperts {
+				continue
+			}
+			perExpert[e] = append(perExpert[e], pair{t, routerScores[t*topK+kPos]})
+		}
+	}
+
 	nWorkers := runtime.GOMAXPROCS(0)
-	if nWorkers > T {
-		nWorkers = T
+	if nWorkers > numExperts {
+		nWorkers = numExperts
 	}
 	if nWorkers < 1 {
 		nWorkers = 1
 	}
 
-	processToken := func(t int, gateUp, gated []float32) {
-		state := hidden[t*D : (t+1)*D]
-		accumRow := accum[t*D : (t+1)*D]
-		for kPos := 0; kPos < topK; kPos++ {
-			e := routerIndices[t*topK+kPos]
-			if e < 0 || e >= numExperts {
-				// Skip masked / invalid indices (reference code also skips
-				// expert_idx == num_experts used as a mask class).
+	// Each token's accum row can be written by up to topK different experts,
+	// each potentially on a different worker. Shard accum per worker and
+	// reduce at the end to avoid scatter-add contention.
+	shards := make([][]float32, nWorkers)
+	for w := range shards {
+		shards[w] = make([]float32, T*D)
+	}
+
+	processExperts := func(workerID, startE, endE int) {
+		shard := shards[workerID]
+		// Per-worker batch scratch, grown on demand to the largest N we see.
+		var gateUpBatch, gatedBatch, outBatch []float32
+		for e := startE; e < endE; e++ {
+			pairs := perExpert[e]
+			n := len(pairs)
+			if n == 0 {
 				continue
 			}
-			weight := routerScores[t*topK+kPos]
+			need := n * twoI
+			if cap(gateUpBatch) < need {
+				gateUpBatch = make([]float32, need)
+			} else {
+				gateUpBatch = gateUpBatch[:need]
+			}
+			need = n * I
+			if cap(gatedBatch) < need {
+				gatedBatch = make([]float32, need)
+			} else {
+				gatedBatch = gatedBatch[:need]
+			}
+			need = n * D
+			if cap(outBatch) < need {
+				outBatch = make([]float32, need)
+			} else {
+				outBatch = outBatch[:need]
+			}
 
-			// gate_up = state @ gate_up_proj[e] + gate_up_bias[e]   # [2*I]
 			projBase := e * expertStride
 			biasBase := e * twoI
-			copy(gateUp, gateUpBias[biasBase:biasBase+twoI])
-			for d := 0; d < D; d++ {
-				rowBase := projBase + d*twoI
-				axpy(state[d], gateUpProj[rowBase:rowBase+twoI], gateUp)
-			}
-
-			// gate = gateUp[:I], up = gateUp[I:]  (concatenated layout)
-			moeActivation(gateUp, gated, I, limit, alpha)
-
-			// out = gated @ downProj[e] + downBias[e]  # [D]
 			downBase := e * downStride
 			dbBase := e * D
-			for i := 0; i < I; i++ {
-				w := weight * gated[i]
-				rowBase := downBase + i*D
-				axpy(w, downProj[rowBase:rowBase+D], accumRow)
+
+			// Seed each row of gateUpBatch with the expert's bias.
+			for k := 0; k < n; k++ {
+				copy(gateUpBatch[k*twoI:(k+1)*twoI],
+					gateUpBias[biasBase:biasBase+twoI])
 			}
+
+			// Batched gate-up matmul. Inner loop order is (d outer, k inner)
+			// so each 5 KB row of gateUpProj is loaded ONCE from DRAM and
+			// reused across all n assigned tokens.
 			for d := 0; d < D; d++ {
-				accumRow[d] += weight * downBias[dbBase+d]
+				wRow := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
+				for k, p := range pairs {
+					s := hidden[p.t*D+d]
+					axpy(s, wRow, gateUpBatch[k*twoI:(k+1)*twoI])
+				}
+			}
+
+			// Activation per batched token.
+			for k := 0; k < n; k++ {
+				moeActivation(
+					gateUpBatch[k*twoI:(k+1)*twoI],
+					gatedBatch[k*I:(k+1)*I],
+					I, limit, alpha,
+				)
+			}
+
+			// Seed outBatch with downBias, then batched down matmul with
+			// the same d-outer/k-inner reuse pattern.
+			for k := 0; k < n; k++ {
+				copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
+			}
+			for i := 0; i < I; i++ {
+				wRow := downProj[downBase+i*D : downBase+(i+1)*D]
+				for k := range pairs {
+					s := gatedBatch[k*I+i]
+					axpy(s, wRow, outBatch[k*D:(k+1)*D])
+				}
+			}
+
+			// Scatter-add weighted outputs into this worker's shard.
+			for k, p := range pairs {
+				axpy(p.weight, outBatch[k*D:(k+1)*D],
+					shard[p.t*D:(p.t+1)*D])
 			}
 		}
 	}
 
 	if nWorkers == 1 {
-		gateUp := make([]float32, twoI)
-		gated := make([]float32, I)
-		for t := 0; t < T; t++ {
-			processToken(t, gateUp, gated)
-		}
+		processExperts(0, 0, numExperts)
 	} else {
 		var wg sync.WaitGroup
-		chunk := (T + nWorkers - 1) / nWorkers
+		chunk := (numExperts + nWorkers - 1) / nWorkers
 		for w := 0; w < nWorkers; w++ {
 			start := w * chunk
-			if start >= T {
+			if start >= numExperts {
 				break
 			}
 			end := start + chunk
-			if end > T {
-				end = T
+			if end > numExperts {
+				end = numExperts
 			}
 			wg.Add(1)
-			go func(start, end int) {
+			go func(workerID, start, end int) {
 				defer wg.Done()
-				gateUp := make([]float32, twoI)
-				gated := make([]float32, I)
-				for t := start; t < end; t++ {
-					processToken(t, gateUp, gated)
-				}
-			}(start, end)
+				processExperts(workerID, start, end)
+			}(w, start, end)
 		}
 		wg.Wait()
+	}
+
+	// Reduce worker shards into accum.
+	for _, shard := range shards {
+		for i := range accum {
+			accum[i] += shard[i]
+		}
 	}
 
 	// Post-scale by topK, matching OpenAIPrivacyFilterMLP.forward:
