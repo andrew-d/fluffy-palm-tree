@@ -4,6 +4,24 @@ package nn
 
 import "math"
 
+// softmaxExpSum: scalar fallback of the SIMD softmax exp+sum pass.
+func softmaxExpSum(scores []float32, lo, hi int, maxLogit float32) float32 {
+	var sum float32
+	for j := lo; j < hi; j++ {
+		e := float32(math.Exp(float64(scores[j] - maxLogit)))
+		scores[j] = e
+		sum += e
+	}
+	return sum
+}
+
+// softmaxScale: scalar fallback of the SIMD softmax normalize pass.
+func softmaxScale(scores []float32, lo, hi int, factor float32) {
+	for j := lo; j < hi; j++ {
+		scores[j] *= factor
+	}
+}
+
 // moeActivation: scalar fallback of the SIMD Quick-GELU-GLU activation.
 func moeActivation(gateUp, gated []float32, I int, limit, alpha float32) {
 	if len(gateUp) < 2*I || len(gated) < I {

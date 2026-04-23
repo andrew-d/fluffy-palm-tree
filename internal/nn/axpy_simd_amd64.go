@@ -75,6 +75,46 @@ func fastExp16(x archsimd.Float32x16) archsimd.Float32x16 {
 	return p.Mul(pow2)
 }
 
+// softmaxExpSum replaces scores[lo:hi] with exp(scores[lo:hi] - maxLogit)
+// and returns the sum of the exp values. Used by GQAAttentionWithSinks
+// to compute the softmax denominator in one vectorized pass.
+func softmaxExpSum(scores []float32, lo, hi int, maxLogit float32) float32 {
+	maxV := archsimd.BroadcastFloat32x16(maxLogit)
+	accV := archsimd.BroadcastFloat32x16(0)
+	j := lo
+	for ; j+16 <= hi; j += 16 {
+		sv := archsimd.LoadFloat32x16Slice(scores[j:])
+		e := fastExp16(sv.Sub(maxV))
+		e.StoreSlice(scores[j:])
+		accV = accV.Add(e)
+	}
+	var lanes [16]float32
+	accV.Store(&lanes)
+	sum := (((lanes[0] + lanes[1]) + (lanes[2] + lanes[3])) +
+		((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]))) +
+		(((lanes[8] + lanes[9]) + (lanes[10] + lanes[11])) +
+			((lanes[12] + lanes[13]) + (lanes[14] + lanes[15])))
+	for ; j < hi; j++ {
+		e := float32(math.Exp(float64(scores[j] - maxLogit)))
+		scores[j] = e
+		sum += e
+	}
+	return sum
+}
+
+// softmaxScale multiplies scores[lo:hi] by scalar factor.
+func softmaxScale(scores []float32, lo, hi int, factor float32) {
+	factorV := archsimd.BroadcastFloat32x16(factor)
+	j := lo
+	for ; j+16 <= hi; j += 16 {
+		sv := archsimd.LoadFloat32x16Slice(scores[j:])
+		sv.Mul(factorV).StoreSlice(scores[j:])
+	}
+	for ; j < hi; j++ {
+		scores[j] *= factor
+	}
+}
+
 // moeActivation computes the Quick-GELU-gated GLU activation used inside
 // MoEExperts:
 //

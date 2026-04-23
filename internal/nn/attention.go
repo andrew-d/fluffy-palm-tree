@@ -239,20 +239,12 @@ func GQAAttentionWithSinks(
 			// finite candidate, so the -inf fallback from the original is
 			// only reachable when T==0; defensive check is unnecessary here.
 
-			// Softmax in fp32 over [jLo, jHi); fp64 denom to minimize roundoff.
-			var denom float64
-			for j := jLo; j < jHi; j++ {
-				e := math.Exp(float64(scores[j] - maxLogit))
-				scores[j] = float32(e)
-				denom += e
-			}
-			denom += math.Exp(float64(sinkLogit - maxLogit))
-			// Normalize — the sink column is intentionally dropped after
-			// normalization, leaving it as "lost mass".
-			inv := 1.0 / denom
-			for j := jLo; j < jHi; j++ {
-				scores[j] = float32(float64(scores[j]) * inv)
-			}
+			// Softmax in fp32 over [jLo, jHi). The sink column is included
+			// in the denominator for "lost mass" semantics but never
+			// multiplied back into attnOut.
+			sum := softmaxExpSum(scores, jLo, jHi, maxLogit)
+			sum += float32(math.Exp(float64(sinkLogit - maxLogit)))
+			softmaxScale(scores, jLo, jHi, 1.0/sum)
 
 			// attnOut[h, i, :] = sum_{j in [jLo,jHi)} scores[j] * v[j, kvIdx, :]
 			dstOff := (h*T + i) * headDim
