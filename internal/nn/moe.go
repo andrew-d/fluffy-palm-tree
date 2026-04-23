@@ -361,19 +361,33 @@ func MoEExperts(
 		wg.Wait()
 	}
 
-	// Reduce worker shards into accum.
-	for _, shard := range shards {
-		for i := range accum {
-			accum[i] += shard[i]
-		}
-	}
-
-	// Post-scale by topK, matching OpenAIPrivacyFilterMLP.forward:
-	//   hidden_states = hidden_states * self.num_experts  (== topK)
+	// Reduce worker shards into accum and apply the topK post-scale in a
+	// single fan-out so the output buffer is touched exactly once.
 	scale := float32(topK)
-	for i := range accum {
-		accum[i] *= scale
+	reduceChunk := (T*D + nWorkers - 1) / nWorkers
+	var rwg sync.WaitGroup
+	for w := 0; w < nWorkers; w++ {
+		start := w * reduceChunk
+		if start >= T*D {
+			break
+		}
+		end := start + reduceChunk
+		if end > T*D {
+			end = T*D
+		}
+		rwg.Add(1)
+		go func(start, end int) {
+			defer rwg.Done()
+			for i := start; i < end; i++ {
+				var s float32
+				for _, shard := range shards {
+					s += shard[i]
+				}
+				accum[i] = s * scale
+			}
+		}(start, end)
 	}
+	rwg.Wait()
 	return accum
 }
 
