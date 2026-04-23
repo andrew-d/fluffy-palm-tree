@@ -185,13 +185,12 @@ func MoEExperts(
 		t      int
 		weight float32
 	}
+	// Router always produces valid indices (0 ≤ e < numExperts); skip
+	// the per-iter bounds check.
 	counts := make([]int, numExperts)
 	for t := 0; t < T; t++ {
 		for kPos := 0; kPos < topK; kPos++ {
-			e := routerIndices[t*topK+kPos]
-			if e >= 0 && e < numExperts {
-				counts[e]++
-			}
+			counts[routerIndices[t*topK+kPos]]++
 		}
 	}
 	perExpert := make([][]pair, numExperts)
@@ -203,9 +202,6 @@ func MoEExperts(
 	for t := 0; t < T; t++ {
 		for kPos := 0; kPos < topK; kPos++ {
 			e := routerIndices[t*topK+kPos]
-			if e < 0 || e >= numExperts {
-				continue
-			}
 			perExpert[e] = append(perExpert[e], pair{t, routerScores[t*topK+kPos]})
 		}
 	}
