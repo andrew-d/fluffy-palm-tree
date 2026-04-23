@@ -407,9 +407,16 @@ func MoEExperts(
 			}
 
 			// Scatter-add weighted outputs into this worker's shard.
-			for k, p := range pairs {
-				axpy(p.weight, outBatch[k*D:(k+1)*D],
-					shard[p.t*D:(p.t+1)*D])
+			k := 0
+			for ; k+2 <= n; k += 2 {
+				p0 := pairs[k]
+				p1 := pairs[k+1]
+				axpy(p0.weight, outBatch[k*D:(k+1)*D], shard[p0.t*D:(p0.t+1)*D])
+				axpy(p1.weight, outBatch[(k+1)*D:(k+2)*D], shard[p1.t*D:(p1.t+1)*D])
+			}
+			for ; k < n; k++ {
+				p := pairs[k]
+				axpy(p.weight, outBatch[k*D:(k+1)*D], shard[p.t*D:(p.t+1)*D])
 			}
 		}
 	}
