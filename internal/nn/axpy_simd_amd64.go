@@ -225,14 +225,8 @@ func axpyBatch16(
 		for ; k+2 <= n; k += 2 {
 			off0 := k*stride + i
 			off1 := (k+1)*stride + i
-			// Split each yv's 16-FMA dep chain into two 8-FMA sub-chains
-			// (a and b), merged at the store.
 			yv0 := archsimd.LoadFloat32x16Slice(y[off0:])
 			yv1 := archsimd.LoadFloat32x16Slice(y[off1:])
-			zero := archsimd.BroadcastFloat32x16(0)
-			yv0b := zero
-			yv1b := zero
-			// s=0..7 → chain a
 			yv0 = archsimd.BroadcastFloat32x16(a[0][k]).MulAdd(wv0, yv0)
 			yv1 = archsimd.BroadcastFloat32x16(a[0][k+1]).MulAdd(wv0, yv1)
 			yv0 = archsimd.BroadcastFloat32x16(a[1][k]).MulAdd(wv1, yv0)
@@ -249,25 +243,24 @@ func axpyBatch16(
 			yv1 = archsimd.BroadcastFloat32x16(a[6][k+1]).MulAdd(wv6, yv1)
 			yv0 = archsimd.BroadcastFloat32x16(a[7][k]).MulAdd(wv7, yv0)
 			yv1 = archsimd.BroadcastFloat32x16(a[7][k+1]).MulAdd(wv7, yv1)
-			// s=8..15 → chain b (independent accumulators)
-			yv0b = archsimd.BroadcastFloat32x16(a[8][k]).MulAdd(wv8, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[8][k+1]).MulAdd(wv8, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[9][k]).MulAdd(wv9, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[9][k+1]).MulAdd(wv9, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[10][k]).MulAdd(wv10, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[10][k+1]).MulAdd(wv10, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[11][k]).MulAdd(wv11, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[11][k+1]).MulAdd(wv11, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[12][k]).MulAdd(wv12, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[12][k+1]).MulAdd(wv12, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[13][k]).MulAdd(wv13, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[13][k+1]).MulAdd(wv13, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[14][k]).MulAdd(wv14, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[14][k+1]).MulAdd(wv14, yv1b)
-			yv0b = archsimd.BroadcastFloat32x16(a[15][k]).MulAdd(wv15, yv0b)
-			yv1b = archsimd.BroadcastFloat32x16(a[15][k+1]).MulAdd(wv15, yv1b)
-			yv0.Add(yv0b).StoreSlice(y[off0:])
-			yv1.Add(yv1b).StoreSlice(y[off1:])
+			yv0 = archsimd.BroadcastFloat32x16(a[8][k]).MulAdd(wv8, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[8][k+1]).MulAdd(wv8, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[9][k]).MulAdd(wv9, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[9][k+1]).MulAdd(wv9, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[10][k]).MulAdd(wv10, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[10][k+1]).MulAdd(wv10, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[11][k]).MulAdd(wv11, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[11][k+1]).MulAdd(wv11, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[12][k]).MulAdd(wv12, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[12][k+1]).MulAdd(wv12, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[13][k]).MulAdd(wv13, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[13][k+1]).MulAdd(wv13, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[14][k]).MulAdd(wv14, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[14][k+1]).MulAdd(wv14, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[15][k]).MulAdd(wv15, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[15][k+1]).MulAdd(wv15, yv1)
+			yv0.StoreSlice(y[off0:])
+			yv1.StoreSlice(y[off1:])
 		}
 		for ; k < n; k++ {
 			off := k*stride + i
