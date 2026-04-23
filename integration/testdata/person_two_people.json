@@ -1,0 +1,19 @@
+{
+  "text": "Please loop in Ron Weasley and Luna Lovegood on the thread.",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": " Ron Weasley",
+      "start": 14,
+      "end": 26,
+      "score": 0.9993821183840433
+    },
+    {
+      "entity_group": "private_person",
+      "word": " Luna Lovegood",
+      "start": 30,
+      "end": 44,
+      "score": 0.9999502102533976
+    }
+  ]
+}

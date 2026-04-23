@@ -1,0 +1,19 @@
+{
+  "text": "My credit card number is 4111 1111 1111 1111 and it expires next year.",
+  "entities": [
+    {
+      "entity_group": "account_number",
+      "word": "4111 1111 1111 1111",
+      "start": 25,
+      "end": 44,
+      "score": 0.9998223889957775
+    },
+    {
+      "entity_group": "private_date",
+      "word": " next year",
+      "start": 59,
+      "end": 69,
+      "score": 0.6515410840511322
+    }
+  ]
+}

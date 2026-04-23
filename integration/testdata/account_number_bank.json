@@ -1,0 +1,12 @@
+{
+  "text": "My account number is 000123456789 at the fictional community bank.",
+  "entities": [
+    {
+      "entity_group": "account_number",
+      "word": "000123456789",
+      "start": 21,
+      "end": 33,
+      "score": 0.9999894797801971
+    }
+  ]
+}

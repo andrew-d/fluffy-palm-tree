@@ -1,0 +1,19 @@
+{
+  "text": "Please add Jane Doe and John Smith to the client roster immediately.",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": " Jane Doe",
+      "start": 10,
+      "end": 19,
+      "score": 0.9999995827674866
+    },
+    {
+      "entity_group": "private_person",
+      "word": " John Smith",
+      "start": 23,
+      "end": 34,
+      "score": 0.9999997019767761
+    }
+  ]
+}

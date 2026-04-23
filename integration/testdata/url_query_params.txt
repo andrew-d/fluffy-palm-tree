@@ -1,0 +1,1 @@
+Check the share link https://fake.example.org/photos?user=alice&token=abc123 for the album.

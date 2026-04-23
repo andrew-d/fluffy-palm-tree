@@ -1,0 +1,26 @@
+{
+  "text": "Contact Alice Smith at alice.smith@example.com or call 555-222-3333 after 5pm.",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": " Alice Smith",
+      "start": 7,
+      "end": 19,
+      "score": 0.9999961853027344
+    },
+    {
+      "entity_group": "private_email",
+      "word": " alice.smith@example.com",
+      "start": 22,
+      "end": 46,
+      "score": 0.9997578382492065
+    },
+    {
+      "entity_group": "private_phone",
+      "word": "555-222-3333",
+      "start": 55,
+      "end": 67,
+      "score": 0.9999146064122518
+    }
+  ]
+}

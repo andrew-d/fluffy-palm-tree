@@ -1,0 +1,12 @@
+{
+  "text": "You can reach Bob at (555) 867-5309 after 6pm.",
+  "entities": [
+    {
+      "entity_group": "private_phone",
+      "word": " (555) 867-5309",
+      "start": 20,
+      "end": 35,
+      "score": 0.9999902844429016
+    }
+  ]
+}

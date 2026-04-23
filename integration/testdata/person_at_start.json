@@ -1,0 +1,12 @@
+{
+  "text": "Alice Smith is my emergency contact and she lives nearby.",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": "Alice Smith",
+      "start": 0,
+      "end": 11,
+      "score": 0.9962133467197418
+    }
+  ]
+}

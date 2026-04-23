@@ -1,0 +1,12 @@
+{
+  "text": "My personal blog lives at https://notreal.example.com/home.",
+  "entities": [
+    {
+      "entity_group": "private_url",
+      "word": " https://notreal.example.com/home",
+      "start": 25,
+      "end": 58,
+      "score": 0.9999697378703526
+    }
+  ]
+}

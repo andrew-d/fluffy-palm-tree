@@ -1,0 +1,12 @@
+{
+  "text": "The person you should email tomorrow is Neville Longbottom",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": " Neville Longbottom",
+      "start": 39,
+      "end": 58,
+      "score": 0.9999918142954508
+    }
+  ]
+}

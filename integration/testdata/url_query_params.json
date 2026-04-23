@@ -1,0 +1,12 @@
+{
+  "text": "Check the share link https://fake.example.org/photos?user=alice&token=abc123 for the album.",
+  "entities": [
+    {
+      "entity_group": "private_url",
+      "word": " https://fake.example.org/photos?user=alice&token=abc123",
+      "start": 20,
+      "end": 76,
+      "score": 0.9999766031901042
+    }
+  ]
+}

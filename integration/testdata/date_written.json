@@ -1,0 +1,12 @@
+{
+  "text": "She was born on March 5, 1987 in a small coastal town.",
+  "entities": [
+    {
+      "entity_group": "private_date",
+      "word": " March 5, 1987",
+      "start": 15,
+      "end": 29,
+      "score": 0.9999966791697911
+    }
+  ]
+}

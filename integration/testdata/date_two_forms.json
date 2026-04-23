@@ -1,0 +1,19 @@
+{
+  "text": "The appointment was on March 5, 2024 which we later moved to 03/12/2024.",
+  "entities": [
+    {
+      "entity_group": "private_date",
+      "word": " March 5, 2024",
+      "start": 22,
+      "end": 36,
+      "score": 0.9999693291527885
+    },
+    {
+      "entity_group": "private_date",
+      "word": "03/12/2024",
+      "start": 61,
+      "end": 71,
+      "score": 0.9999938408533732
+    }
+  ]
+}

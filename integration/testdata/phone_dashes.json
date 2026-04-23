@@ -1,0 +1,12 @@
+{
+  "text": "Call me back at 555-123-4567 whenever you get a chance.",
+  "entities": [
+    {
+      "entity_group": "private_phone",
+      "word": "555-123-4567",
+      "start": 16,
+      "end": 28,
+      "score": 0.9999974171320597
+    }
+  ]
+}

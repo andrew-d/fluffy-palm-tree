@@ -1,0 +1,26 @@
+{
+  "text": "Harry Potter (harry.potter@hogwarts.edu, 555-123-4567) lives at 4 Privet Drive.",
+  "entities": [
+    {
+      "entity_group": "private_email",
+      "word": "harry.potter@hogwarts.edu",
+      "start": 14,
+      "end": 39,
+      "score": 0.9999755952093337
+    },
+    {
+      "entity_group": "private_phone",
+      "word": "555-123-4567",
+      "start": 41,
+      "end": 53,
+      "score": 0.9999765157699585
+    },
+    {
+      "entity_group": "private_address",
+      "word": "4 Privet Drive",
+      "start": 64,
+      "end": 78,
+      "score": 0.9983084350824356
+    }
+  ]
+}

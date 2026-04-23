@@ -1,0 +1,12 @@
+{
+  "text": "His date of birth is 03/05/1987 according to the form.",
+  "entities": [
+    {
+      "entity_group": "private_date",
+      "word": "03/05/1987",
+      "start": 21,
+      "end": 31,
+      "score": 0.9999956488609314
+    }
+  ]
+}

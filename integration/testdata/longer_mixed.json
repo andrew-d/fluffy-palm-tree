@@ -1,0 +1,40 @@
+{
+  "text": "Hi team, forwarding a note from Ginny Weasley who can be reached at ginny.w@owlpost.example or on +1 (555) 765-4321; her shipping address is 12 Burrow Lane, Ottery St Catchpole, and her account number is 9876543210 for reference.",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": " Ginny Weasley",
+      "start": 31,
+      "end": 45,
+      "score": 0.9999969005584717
+    },
+    {
+      "entity_group": "private_email",
+      "word": " ginny.w@owlpost.example",
+      "start": 67,
+      "end": 91,
+      "score": 0.9999310714857919
+    },
+    {
+      "entity_group": "private_phone",
+      "word": " +1 (555) 765-4321",
+      "start": 97,
+      "end": 115,
+      "score": 0.9999953627586364
+    },
+    {
+      "entity_group": "private_address",
+      "word": "12 Burrow Lane, Ottery St Catchpole",
+      "start": 141,
+      "end": 176,
+      "score": 0.9999636173248291
+    },
+    {
+      "entity_group": "account_number",
+      "word": "9876543210",
+      "start": 204,
+      "end": 214,
+      "score": 0.9162905812263489
+    }
+  ]
+}

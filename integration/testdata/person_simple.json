@@ -1,0 +1,12 @@
+{
+  "text": "My name is Harry Potter and I live in the countryside.",
+  "entities": [
+    {
+      "entity_group": "private_person",
+      "word": " Harry Potter",
+      "start": 10,
+      "end": 23,
+      "score": 0.9999980926513672
+    }
+  ]
+}

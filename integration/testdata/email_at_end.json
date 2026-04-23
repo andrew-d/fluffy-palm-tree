@@ -1,0 +1,12 @@
+{
+  "text": "Our primary contact address is support.desk@fictional-corp.example",
+  "entities": [
+    {
+      "entity_group": "private_email",
+      "word": " support.desk@fictional-corp.example",
+      "start": 30,
+      "end": 66,
+      "score": 0.9455149239963956
+    }
+  ]
+}

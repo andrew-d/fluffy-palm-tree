@@ -1,0 +1,12 @@
+{
+  "text": "Please deliver the package to 123 Fake Street, Springfield, IL 62704.",
+  "entities": [
+    {
+      "entity_group": "private_address",
+      "word": "123 Fake Street, Springfield, IL 62704",
+      "start": 30,
+      "end": 68,
+      "score": 0.9999978065490722
+    }
+  ]
+}

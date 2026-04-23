@@ -1,0 +1,12 @@
+{
+  "text": "Send receipts to alice+shopping@example.com before Friday.",
+  "entities": [
+    {
+      "entity_group": "private_email",
+      "word": " alice+shopping@example.com",
+      "start": 16,
+      "end": 43,
+      "score": 0.9999866247177124
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Send receipts to alice+shopping@example.com before Friday.

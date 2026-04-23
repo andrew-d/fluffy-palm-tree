@@ -1,0 +1,12 @@
+{
+  "text": "My mobile is +44 20 7946 0958 if you need to reach me urgently.",
+  "entities": [
+    {
+      "entity_group": "private_phone",
+      "word": " +44 20 7946 0958",
+      "start": 12,
+      "end": 29,
+      "score": 0.9999962091445923
+    }
+  ]
+}
