@@ -220,28 +220,10 @@ func GQAAttentionWithSinks(
 			}
 
 			// Raw logits s[j] = <q_row, k[j, kvIdx, :]>, only for valid j.
-			// Eight parallel accumulators — headDim is 64 on the current
-			// model (divisible by 8); tail loop handles other shapes.
 			maxLogit := float32(math.Inf(-1))
 			for j := jLo; j < jHi; j++ {
 				kOff := (j*numKV + kvIdx) * headDim
-				kRow := k[kOff : kOff+headDim]
-				var s0, s1, s2, s3, s4, s5, s6, s7 float32
-				d2 := 0
-				for ; d2+8 <= headDim; d2 += 8 {
-					s0 += qRow[d2] * kRow[d2]
-					s1 += qRow[d2+1] * kRow[d2+1]
-					s2 += qRow[d2+2] * kRow[d2+2]
-					s3 += qRow[d2+3] * kRow[d2+3]
-					s4 += qRow[d2+4] * kRow[d2+4]
-					s5 += qRow[d2+5] * kRow[d2+5]
-					s6 += qRow[d2+6] * kRow[d2+6]
-					s7 += qRow[d2+7] * kRow[d2+7]
-				}
-				s := ((s0 + s1) + (s2 + s3)) + ((s4 + s5) + (s6 + s7))
-				for ; d2 < headDim; d2++ {
-					s += qRow[d2] * kRow[d2]
-				}
+				s := dot(qRow, k[kOff:kOff+headDim])
 				scores[j] = s
 				if s > maxLogit {
 					maxLogit = s
@@ -284,21 +266,7 @@ func GQAAttentionWithSinks(
 					continue
 				}
 				vOff := (j*numKV + kvIdx) * headDim
-				vRow := v[vOff : vOff+headDim]
-				d2 := 0
-				for ; d2+8 <= headDim; d2 += 8 {
-					dst[d2] += w * vRow[d2]
-					dst[d2+1] += w * vRow[d2+1]
-					dst[d2+2] += w * vRow[d2+2]
-					dst[d2+3] += w * vRow[d2+3]
-					dst[d2+4] += w * vRow[d2+4]
-					dst[d2+5] += w * vRow[d2+5]
-					dst[d2+6] += w * vRow[d2+6]
-					dst[d2+7] += w * vRow[d2+7]
-				}
-				for ; d2 < headDim; d2++ {
-					dst[d2] += w * vRow[d2]
-				}
+				axpy(w, v[vOff:vOff+headDim], dst)
 			}
 		}
 	}
