@@ -277,12 +277,28 @@ func GQAAttentionWithSinks(
 			softmaxScale(scores, jLo, jHi, 1.0/sum)
 
 			// attnOut[h, i, :] = sum_{j in [jLo,jHi)} scores[j] * v[j, kvIdx, :]
+			// Batch 16 j's per axpyBatch16 call: one shared dst, 16
+			// different (alpha, vRow) pairs per call, replacing 16 axpy
+			// calls with 1. Saves 15/16 of the dst load/store traffic.
 			dstOff := (h*T + i) * headDim
 			dst := attnOut[dstOff : dstOff+headDim]
 			for d2 := 0; d2 < headDim; d2++ {
 				dst[d2] = 0
 			}
-			for j := jLo; j < jHi; j++ {
+			var alphasScratch [16]float32
+			var alphas [16][]float32
+			var vRows [16][]float32
+			j := jLo
+			for ; j+16 <= jHi; j += 16 {
+				for s := 0; s < 16; s++ {
+					alphasScratch[s] = scores[j+s]
+					alphas[s] = alphasScratch[s : s+1]
+					vOff := ((j + s)*numKV + kvIdx) * headDim
+					vRows[s] = v[vOff : vOff+headDim]
+				}
+				axpyBatch16(alphas, vRows, dst, 0)
+			}
+			for ; j < jHi; j++ {
 				w := scores[j]
 				if w == 0 {
 					continue
