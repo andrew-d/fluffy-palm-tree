@@ -1,0 +1,256 @@
+package nn
+
+import "math"
+
+// Linear applies y[t] = W @ x[t] + b per token, where W is stored row-major
+// with shape [out, in] (the HuggingFace nn.Linear.weight convention) and b has
+// shape [out]. Pass b == nil to skip the bias term.
+//
+//	x:      [T, in]  row-major
+//	W:      [out, in] row-major
+//	b:      [out] or nil
+//	Returns [T, out] row-major.
+func Linear(x, W, b []float32, T, in, out int) []float32 {
+	if len(x) != T*in {
+		panic("Linear: x length mismatch")
+	}
+	if len(W) != out*in {
+		panic("Linear: W length mismatch")
+	}
+	if b != nil && len(b) != out {
+		panic("Linear: b length mismatch")
+	}
+	y := make([]float32, T*out)
+	for t := 0; t < T; t++ {
+		xrow := x[t*in : (t+1)*in]
+		yrow := y[t*out : (t+1)*out]
+		for o := 0; o < out; o++ {
+			wrow := W[o*in : (o+1)*in]
+			var s float32
+			if b != nil {
+				s = b[o]
+			}
+			for i := 0; i < in; i++ {
+				s += xrow[i] * wrow[i]
+			}
+			yrow[o] = s
+		}
+	}
+	return y
+}
+
+// ApplyRoPE applies rotary positional embeddings in-place to q and k using
+// the openai_privacy_filter "interleaving" layout (as implemented by
+// `_apply_rotary_emb` in transformers.models.openai_privacy_filter):
+//
+//	first_half  = x[..., 0::2]
+//	second_half = x[..., 1::2]
+//	first_out   = first_half  * cos - second_half * sin
+//	second_out  = second_half * cos + first_half  * sin
+//	out         = stack([first_out, second_out], dim=-1).flatten(-2)
+//
+// Concretely the output element at index 2i is `first_out[i]` and the element
+// at index 2i+1 is `second_out[i]`.
+//
+// q: [T, numQ, headDim] row-major; k: [T, numKV, headDim] row-major.
+// cos, sin: [T, headDim/2] row-major. With cos=1, sin=0 the rotation is the
+// identity (required by the smoke test).
+func ApplyRoPE(q, k, cos, sin []float32, T, numQ, numKV, headDim int) {
+	if headDim <= 0 || headDim%2 != 0 {
+		panic("ApplyRoPE: headDim must be positive and even")
+	}
+	half := headDim / 2
+	if len(q) != T*numQ*headDim {
+		panic("ApplyRoPE: q length mismatch")
+	}
+	if len(k) != T*numKV*headDim {
+		panic("ApplyRoPE: k length mismatch")
+	}
+	if len(cos) != T*half || len(sin) != T*half {
+		panic("ApplyRoPE: cos/sin length mismatch")
+	}
+
+	rotate := func(buf []float32, heads int) {
+		for t := 0; t < T; t++ {
+			cr := cos[t*half : (t+1)*half]
+			sr := sin[t*half : (t+1)*half]
+			base := t * heads * headDim
+			for h := 0; h < heads; h++ {
+				off := base + h*headDim
+				for i := 0; i < half; i++ {
+					a := buf[off+2*i]   // first_half[i]
+					b := buf[off+2*i+1] // second_half[i]
+					c := cr[i]
+					s := sr[i]
+					buf[off+2*i] = a*c - b*s
+					buf[off+2*i+1] = b*c + a*s
+				}
+			}
+		}
+	}
+	rotate(q, numQ)
+	rotate(k, numKV)
+}
+
+// GQAAttentionWithSinks computes a single grouped-query attention block with
+// attention sinks and a symmetric bidirectional sliding-window mask. See the
+// docstring in the accompanying test file (and the architecture notes) for the
+// exact reference semantics.
+//
+//	x         : [T, hidden]
+//	wq/bq     : [numQ*headDim, hidden] / [numQ*headDim]
+//	wk/bk     : [numKV*headDim, hidden] / [numKV*headDim]
+//	wv/bv     : [numKV*headDim, hidden] / [numKV*headDim]
+//	wo/bo     : [hidden, numQ*headDim] / [hidden]
+//	sinks     : [numQ] fp32, one learnable logit per query head
+//	cos, sin  : [T, headDim/2] yarn-scaled RoPE tables
+//	window    : half-width of the bidirectional window, as
+//	            `sliding_window + 1`. A pair (i, j) is allowed iff
+//	            `|i-j| <= window - 1`.
+//
+// Returns [T, hidden].
+func GQAAttentionWithSinks(
+	x []float32,
+	wq, bq, wk, bk, wv, bv, wo, bo []float32,
+	sinks []float32,
+	cos, sin []float32,
+	T, hidden, headDim, numQ, numKV, window int,
+) []float32 {
+	if numKV <= 0 || numQ%numKV != 0 {
+		panic("GQAAttentionWithSinks: numQ must be a positive multiple of numKV")
+	}
+	if len(sinks) != numQ {
+		panic("GQAAttentionWithSinks: sinks length mismatch")
+	}
+	group := numQ / numKV
+
+	qDim := numQ * headDim
+	kvDim := numKV * headDim
+
+	// Project.
+	//   q: [T, numQ*headDim]  (row-major; head-major within row)
+	//   k: [T, numKV*headDim]
+	//   v: [T, numKV*headDim]
+	q := Linear(x, wq, bq, T, hidden, qDim)
+	k := Linear(x, wk, bk, T, hidden, kvDim)
+	v := Linear(x, wv, bv, T, hidden, kvDim)
+
+	// Apply RoPE. The projection layout is [T, heads, headDim] with heads
+	// packed inside each token row; ApplyRoPE treats it that way.
+	ApplyRoPE(q, k, cos, sin, T, numQ, numKV, headDim)
+
+	// Scale Q and K individually by headDim^{-0.25} so that q @ k^T ends up
+	// scaled by headDim^{-0.5}.
+	scale := float32(math.Pow(float64(headDim), -0.25))
+	for i := range q {
+		q[i] *= scale
+	}
+	for i := range k {
+		k[i] *= scale
+	}
+
+	// Attention per head. We don't materialize a repeated K/V — query head h
+	// simply consumes kv head h/group.
+	//
+	// attnOut[h, t, :] accumulates into a [numQ, T, headDim] buffer, laid out
+	// as [numQ, T, headDim] row-major.
+	attnOut := make([]float32, numQ*T*headDim)
+
+	// Scratch buffers reused across heads/rows.
+	scores := make([]float32, T) // per-row attention logits against all T keys
+	for h := 0; h < numQ; h++ {
+		kvIdx := h / group
+		sinkLogit := sinks[h]
+		for i := 0; i < T; i++ {
+			// q[i, h, :] at offset (i*numQ + h)*headDim
+			qOff := (i*numQ + h) * headDim
+			qRow := q[qOff : qOff+headDim]
+
+			// Compute raw logits s[j] = <q_row, k[j, kvIdx, :]>.
+			// Apply the sliding window mask directly: entries outside the
+			// window are -inf.
+			maxLogit := float32(math.Inf(-1))
+			for j := 0; j < T; j++ {
+				d := i - j
+				if d < 0 {
+					d = -d
+				}
+				if d > window-1 {
+					scores[j] = float32(math.Inf(-1))
+					continue
+				}
+				kOff := (j*numKV + kvIdx) * headDim
+				kRow := k[kOff : kOff+headDim]
+				var s float32
+				for d2 := 0; d2 < headDim; d2++ {
+					s += qRow[d2] * kRow[d2]
+				}
+				scores[j] = s
+				if s > maxLogit {
+					maxLogit = s
+				}
+			}
+
+			// The sink "column" is sinks[h] for every (h, i); include it in
+			// the max reduction and the softmax denominator.
+			if sinkLogit > maxLogit {
+				maxLogit = sinkLogit
+			}
+			// If every candidate is -inf (shouldn't happen with symmetric
+			// windows + sink, since the sink is finite), fall back to 0.
+			if math.IsInf(float64(maxLogit), -1) {
+				maxLogit = 0
+			}
+
+			// Softmax in fp32; accumulate the denominator over the T visible
+			// keys plus the sink logit.
+			var denom float64
+			for j := 0; j < T; j++ {
+				if math.IsInf(float64(scores[j]), -1) {
+					scores[j] = 0
+					continue
+				}
+				e := math.Exp(float64(scores[j] - maxLogit))
+				scores[j] = float32(e)
+				denom += e
+			}
+			denom += math.Exp(float64(sinkLogit - maxLogit))
+			// Normalize — the sink column is intentionally dropped after
+			// normalization, leaving it as "lost mass".
+			inv := 1.0 / denom
+			for j := 0; j < T; j++ {
+				scores[j] = float32(float64(scores[j]) * inv)
+			}
+
+			// attnOut[h, i, :] = sum_j scores[j] * v[j, kvIdx, :]
+			dstOff := (h*T + i) * headDim
+			dst := attnOut[dstOff : dstOff+headDim]
+			for d2 := 0; d2 < headDim; d2++ {
+				dst[d2] = 0
+			}
+			for j := 0; j < T; j++ {
+				w := scores[j]
+				if w == 0 {
+					continue
+				}
+				vOff := (j*numKV + kvIdx) * headDim
+				vRow := v[vOff : vOff+headDim]
+				for d2 := 0; d2 < headDim; d2++ {
+					dst[d2] += w * vRow[d2]
+				}
+			}
+		}
+	}
+
+	// Transpose from [numQ, T, headDim] back to [T, numQ*headDim] row-major
+	// and feed through the output projection.
+	concat := make([]float32, T*qDim)
+	for h := 0; h < numQ; h++ {
+		for i := 0; i < T; i++ {
+			src := attnOut[(h*T+i)*headDim : (h*T+i+1)*headDim]
+			dst := concat[i*qDim+h*headDim : i*qDim+(h+1)*headDim]
+			copy(dst, src)
+		}
+	}
+	return Linear(concat, wo, bo, T, qDim, hidden)
+}
