@@ -139,6 +139,59 @@ func axpyBatch4(alphas0, alphas1, alphas2, alphas3 []float32, wRow0, wRow1, wRow
 	}
 }
 
+// axpyBatch8 fuses eight adjacent "d" iterations per gateUp/out block.
+// One load + one store per eight d-steps. Fits comfortably in AVX-512's
+// 32 ZMM registers: 8 wRow registers + 1 y/accumulator + scratch for the
+// per-k alpha broadcast.
+func axpyBatch8(
+	a0, a1, a2, a3, a4, a5, a6, a7 []float32,
+	w0, w1, w2, w3, w4, w5, w6, w7 []float32,
+	y []float32, stride int,
+) {
+	n := len(a0)
+	w := len(w0)
+	i := 0
+	for ; i+16 <= w; i += 16 {
+		wv0 := archsimd.LoadFloat32x16Slice(w0[i:])
+		wv1 := archsimd.LoadFloat32x16Slice(w1[i:])
+		wv2 := archsimd.LoadFloat32x16Slice(w2[i:])
+		wv3 := archsimd.LoadFloat32x16Slice(w3[i:])
+		wv4 := archsimd.LoadFloat32x16Slice(w4[i:])
+		wv5 := archsimd.LoadFloat32x16Slice(w5[i:])
+		wv6 := archsimd.LoadFloat32x16Slice(w6[i:])
+		wv7 := archsimd.LoadFloat32x16Slice(w7[i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x16Slice(y[off:])
+			yv = archsimd.BroadcastFloat32x16(a0[k]).MulAdd(wv0, yv)
+			yv = archsimd.BroadcastFloat32x16(a1[k]).MulAdd(wv1, yv)
+			yv = archsimd.BroadcastFloat32x16(a2[k]).MulAdd(wv2, yv)
+			yv = archsimd.BroadcastFloat32x16(a3[k]).MulAdd(wv3, yv)
+			yv = archsimd.BroadcastFloat32x16(a4[k]).MulAdd(wv4, yv)
+			yv = archsimd.BroadcastFloat32x16(a5[k]).MulAdd(wv5, yv)
+			yv = archsimd.BroadcastFloat32x16(a6[k]).MulAdd(wv6, yv)
+			yv = archsimd.BroadcastFloat32x16(a7[k]).MulAdd(wv7, yv)
+			yv.StoreSlice(y[off:])
+		}
+	}
+	if i < w {
+		for j := i; j < w; j++ {
+			v0 := w0[j]
+			v1 := w1[j]
+			v2 := w2[j]
+			v3 := w3[j]
+			v4 := w4[j]
+			v5 := w5[j]
+			v6 := w6[j]
+			v7 := w7[j]
+			for k := 0; k < n; k++ {
+				y[k*stride+j] += a0[k]*v0 + a1[k]*v1 + a2[k]*v2 + a3[k]*v3 +
+					a4[k]*v4 + a5[k]*v5 + a6[k]*v6 + a7[k]*v7
+			}
+		}
+	}
+}
+
 // axpy computes y[i] += alpha * x[i] for i in [0, len(x)). Requires
 // len(x) == len(y). The body issues VFMADD231PS via simd/archsimd so a
 // single instruction processes 16 fp32s (AVX-512) or 8 fp32s (AVX2); the

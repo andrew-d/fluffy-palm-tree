@@ -74,6 +74,31 @@ func axpyBatch4(alphas0, alphas1, alphas2, alphas3 []float32, wRow0, wRow1, wRow
 	}
 }
 
+// axpyBatch8: scalar fallback of the 8-d-fused batched axpy.
+func axpyBatch8(
+	a0, a1, a2, a3, a4, a5, a6, a7 []float32,
+	w0, w1, w2, w3, w4, w5, w6, w7 []float32,
+	y []float32, stride int,
+) {
+	n := len(a0)
+	w := len(w0)
+	for k := 0; k < n; k++ {
+		ak0 := a0[k]
+		ak1 := a1[k]
+		ak2 := a2[k]
+		ak3 := a3[k]
+		ak4 := a4[k]
+		ak5 := a5[k]
+		ak6 := a6[k]
+		ak7 := a7[k]
+		off := k * stride
+		for i := 0; i < w; i++ {
+			y[off+i] += ak0*w0[i] + ak1*w1[i] + ak2*w2[i] + ak3*w3[i] +
+				ak4*w4[i] + ak5*w5[i] + ak6*w6[i] + ak7*w7[i]
+		}
+	}
+}
+
 // axpyBatch: scalar fallback of the SIMD batched axpy.
 func axpyBatch(alphas []float32, wRow []float32, y []float32, stride int) {
 	n := len(alphas)
