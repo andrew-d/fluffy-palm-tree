@@ -20,11 +20,13 @@ cd "$(dirname "$0")/.."
 # flight at once — the full test tree OOMs at parallel=N otherwise.
 # GOAMD64=v3 targets Haswell-and-later (AVX2 + FMA3) so the compiler can
 # emit VFMADD instructions in the tight matmul loops. The host CPU (Xeon
-# Platinum 8259CL) supports AVX-512; v3 is conservatively compatible and
-# is the sweet spot for Go's backend today.
+# Platinum 8259CL) supports AVX-512; v3 is conservatively compatible.
+# GOEXPERIMENT=simd unlocks Go 1.26's simd/archsimd package, which is what
+# lets the hot kernels emit PACKED VFMADD231PS (8 fp32 per instruction)
+# rather than the scalar VFMADD231SS the compiler falls back to otherwise.
 out=$(systemd-run --user --scope --quiet \
     -p MemoryMax=14G -p MemorySwapMax=0 \
-    env GOAMD64=v3 \
+    env GOAMD64=v3 GOEXPERIMENT=simd \
     go test -p=1 -run='^$' -bench='^BenchmarkClassifyMedium$' \
     -benchtime=3x -count=3 . 2>&1)
 

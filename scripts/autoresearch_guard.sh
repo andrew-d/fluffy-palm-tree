@@ -19,9 +19,9 @@ cd "$(dirname "$0")/.."
 
 go vet ./...
 
-# Match the verify script's GOAMD64=v3 so the guard validates exactly the
+# Match the verify script's flags so the guard validates exactly the
 # same binary flavor we're benchmarking.
 systemd-run --user --scope --quiet \
     -p MemoryMax=14G -p MemorySwapMax=0 \
-    env GOAMD64=v3 \
+    env GOAMD64=v3 GOEXPERIMENT=simd \
     go test -p=1 -timeout=300s -count=1 ./...
