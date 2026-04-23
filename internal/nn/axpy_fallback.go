@@ -26,6 +26,34 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
+// gemv: scalar fallback of the block-outer SIMD matmul. Outer over j so
+// the result can be accumulated in an 8-way unrolled register-local
+// reduction, matching the SIMD variant's I/O profile.
+func gemv(x, W, bias, y []float32, rows, cols int) {
+	if len(x) != rows {
+		panic("gemv: x length mismatch")
+	}
+	if len(W) < rows*cols {
+		panic("gemv: W length mismatch")
+	}
+	if len(y) < cols {
+		panic("gemv: y length mismatch")
+	}
+	if bias != nil && len(bias) < cols {
+		panic("gemv: bias length mismatch")
+	}
+	for j := 0; j < cols; j++ {
+		var s float32
+		if bias != nil {
+			s = bias[j]
+		}
+		for d := 0; d < rows; d++ {
+			s += x[d] * W[d*cols+j]
+		}
+		y[j] = s
+	}
+}
+
 // dot: scalar fallback of the SIMD dot product. Uses 8 parallel
 // accumulators to break the reduction dependency chain.
 func dot(x, w []float32) float32 {
