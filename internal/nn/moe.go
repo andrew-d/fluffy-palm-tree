@@ -197,12 +197,8 @@ func MoEExperts(
 			biasBase := e * twoI
 			copy(gateUp, gateUpBias[biasBase:biasBase+twoI])
 			for d := 0; d < D; d++ {
-				s := state[d]
-				if s == 0 {
-					continue
-				}
 				rowBase := projBase + d*twoI
-				axpy(s, gateUpProj[rowBase:rowBase+twoI], gateUp)
+				axpy(state[d], gateUpProj[rowBase:rowBase+twoI], gateUp)
 			}
 
 			// gate = gateUp[:I], up = gateUp[I:]  (concatenated layout)
@@ -226,11 +222,7 @@ func MoEExperts(
 			downBase := e * downStride
 			dbBase := e * D
 			for i := 0; i < I; i++ {
-				gi := gated[i]
-				if gi == 0 {
-					continue
-				}
-				w := weight * gi
+				w := weight * gated[i]
 				rowBase := downBase + i*D
 				axpy(w, downProj[rowBase:rowBase+D], accumRow)
 			}
