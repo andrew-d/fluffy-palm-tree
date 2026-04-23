@@ -470,6 +470,86 @@ func dotBatch8(w []float32, xs [8][]float32) [8]float32 {
 	return result
 }
 
+// linearTile4x4 computes a 4 (token) × 4 (output) C-tile of Linear with
+// K as the outer reduction dimension. Each of the 16 accumulators is a
+// Float32x16 that sums partial products for one (token, output) pair;
+// the K loop loads 4 x-vectors + 4 w-vectors per step and issues 16 FMAs
+// against them (MN-reuse ratio 4 — each x and w load feeds 4 FMAs).
+//
+// This is tinyBLAS's Kazushige-Goto-style inner kernel adapted for our
+// simd/archsimd stack. Compared to dotBatch8 (reuse ratio ≈ 0.89), this
+// doubles arithmetic intensity per load, which is the lever whenever
+// Linear is load-bandwidth bound (Q/O projections on our shape).
+//
+// Precondition: tOff+4 ≤ T, oOff+4 ≤ out, in%16 == 0 (checked at call site).
+func linearTile4x4(x []float32, W []float32, y []float32, in, out, tOff, oOff int, bias []float32) {
+	z := archsimd.BroadcastFloat32x16(0)
+	a00, a01, a02, a03 := z, z, z, z
+	a10, a11, a12, a13 := z, z, z, z
+	a20, a21, a22, a23 := z, z, z, z
+	a30, a31, a32, a33 := z, z, z, z
+
+	xBase := tOff * in
+	wBase := oOff * in
+	for k := 0; k+16 <= in; k += 16 {
+		xv0 := archsimd.LoadFloat32x16Slice(x[xBase+0*in+k:])
+		xv1 := archsimd.LoadFloat32x16Slice(x[xBase+1*in+k:])
+		xv2 := archsimd.LoadFloat32x16Slice(x[xBase+2*in+k:])
+		xv3 := archsimd.LoadFloat32x16Slice(x[xBase+3*in+k:])
+		wv0 := archsimd.LoadFloat32x16Slice(W[wBase+0*in+k:])
+		wv1 := archsimd.LoadFloat32x16Slice(W[wBase+1*in+k:])
+		wv2 := archsimd.LoadFloat32x16Slice(W[wBase+2*in+k:])
+		wv3 := archsimd.LoadFloat32x16Slice(W[wBase+3*in+k:])
+
+		a00 = xv0.MulAdd(wv0, a00)
+		a01 = xv0.MulAdd(wv1, a01)
+		a02 = xv0.MulAdd(wv2, a02)
+		a03 = xv0.MulAdd(wv3, a03)
+		a10 = xv1.MulAdd(wv0, a10)
+		a11 = xv1.MulAdd(wv1, a11)
+		a12 = xv1.MulAdd(wv2, a12)
+		a13 = xv1.MulAdd(wv3, a13)
+		a20 = xv2.MulAdd(wv0, a20)
+		a21 = xv2.MulAdd(wv1, a21)
+		a22 = xv2.MulAdd(wv2, a22)
+		a23 = xv2.MulAdd(wv3, a23)
+		a30 = xv3.MulAdd(wv0, a30)
+		a31 = xv3.MulAdd(wv1, a31)
+		a32 = xv3.MulAdd(wv2, a32)
+		a33 = xv3.MulAdd(wv3, a33)
+	}
+
+	hsum := func(v archsimd.Float32x16) float32 {
+		var l [16]float32
+		v.Store(&l)
+		return (((l[0]+l[1])+(l[2]+l[3]))+((l[4]+l[5])+(l[6]+l[7]))) +
+			(((l[8]+l[9])+(l[10]+l[11]))+((l[12]+l[13])+(l[14]+l[15])))
+	}
+	var b0, b1, b2, b3 float32
+	if bias != nil {
+		b0 = bias[oOff+0]
+		b1 = bias[oOff+1]
+		b2 = bias[oOff+2]
+		b3 = bias[oOff+3]
+	}
+	y[(tOff+0)*out+oOff+0] = hsum(a00) + b0
+	y[(tOff+0)*out+oOff+1] = hsum(a01) + b1
+	y[(tOff+0)*out+oOff+2] = hsum(a02) + b2
+	y[(tOff+0)*out+oOff+3] = hsum(a03) + b3
+	y[(tOff+1)*out+oOff+0] = hsum(a10) + b0
+	y[(tOff+1)*out+oOff+1] = hsum(a11) + b1
+	y[(tOff+1)*out+oOff+2] = hsum(a12) + b2
+	y[(tOff+1)*out+oOff+3] = hsum(a13) + b3
+	y[(tOff+2)*out+oOff+0] = hsum(a20) + b0
+	y[(tOff+2)*out+oOff+1] = hsum(a21) + b1
+	y[(tOff+2)*out+oOff+2] = hsum(a22) + b2
+	y[(tOff+2)*out+oOff+3] = hsum(a23) + b3
+	y[(tOff+3)*out+oOff+0] = hsum(a30) + b0
+	y[(tOff+3)*out+oOff+1] = hsum(a31) + b1
+	y[(tOff+3)*out+oOff+2] = hsum(a32) + b2
+	y[(tOff+3)*out+oOff+3] = hsum(a33) + b3
+}
+
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +
