@@ -180,7 +180,7 @@ func MoEExperts(
 		nWorkers = 1
 	}
 
-	processToken := func(t int, gateUp, gated, outScratch []float32) {
+	processToken := func(t int, gateUp, gated []float32) {
 		state := hidden[t*D : (t+1)*D]
 		accumRow := accum[t*D : (t+1)*D]
 		for kPos := 0; kPos < topK; kPos++ {
@@ -195,13 +195,15 @@ func MoEExperts(
 			// gate_up = state @ gate_up_proj[e] + gate_up_bias[e]   # [2*I]
 			projBase := e * expertStride
 			biasBase := e * twoI
-			gemv(
-				state,
-				gateUpProj[projBase:projBase+D*twoI],
-				gateUpBias[biasBase:biasBase+twoI],
-				gateUp,
-				D, twoI,
-			)
+			copy(gateUp, gateUpBias[biasBase:biasBase+twoI])
+			for d := 0; d < D; d++ {
+				s := state[d]
+				if s == 0 {
+					continue
+				}
+				rowBase := projBase + d*twoI
+				axpy(s, gateUpProj[rowBase:rowBase+twoI], gateUp)
+			}
 
 			// gate = gateUp[:I], up = gateUp[I:]  (concatenated layout)
 			for i := 0; i < I; i++ {
@@ -221,28 +223,28 @@ func MoEExperts(
 			}
 
 			// out = gated @ downProj[e] + downBias[e]  # [D]
-			// Then accumRow += weight * out. We materialize `out` into the
-			// per-goroutine outScratch so the D reduction stays in a SIMD
-			// register (gemv) and the accumRow update is a single axpy.
 			downBase := e * downStride
 			dbBase := e * D
-			gemv(
-				gated,
-				downProj[downBase:downBase+I*D],
-				downBias[dbBase:dbBase+D],
-				outScratch,
-				I, D,
-			)
-			axpy(weight, outScratch[:D], accumRow)
+			for i := 0; i < I; i++ {
+				gi := gated[i]
+				if gi == 0 {
+					continue
+				}
+				w := weight * gi
+				rowBase := downBase + i*D
+				axpy(w, downProj[rowBase:rowBase+D], accumRow)
+			}
+			for d := 0; d < D; d++ {
+				accumRow[d] += weight * downBias[dbBase+d]
+			}
 		}
 	}
 
 	if nWorkers == 1 {
 		gateUp := make([]float32, twoI)
 		gated := make([]float32, I)
-		outScratch := make([]float32, D)
 		for t := 0; t < T; t++ {
-			processToken(t, gateUp, gated, outScratch)
+			processToken(t, gateUp, gated)
 		}
 	} else {
 		var wg sync.WaitGroup
@@ -261,9 +263,8 @@ func MoEExperts(
 				defer wg.Done()
 				gateUp := make([]float32, twoI)
 				gated := make([]float32, I)
-				outScratch := make([]float32, D)
 				for t := start; t < end; t++ {
-					processToken(t, gateUp, gated, outScratch)
+					processToken(t, gateUp, gated)
 				}
 			}(start, end)
 		}
