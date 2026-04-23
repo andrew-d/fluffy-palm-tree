@@ -152,16 +152,6 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
-// addInPlace: scalar fallback of the SIMD a += b.
-func addInPlace(a, b []float32) {
-	if len(a) != len(b) {
-		panic("addInPlace: length mismatch")
-	}
-	for i := range a {
-		a[i] += b[i]
-	}
-}
-
 // linearTile4x4: scalar fallback of the 4×4 C-tile matmul kernel.
 func linearTile4x4(x []float32, W []float32, y []float32, in, out, tOff, oOff int, bias []float32) {
 	for i := 0; i < 4; i++ {
