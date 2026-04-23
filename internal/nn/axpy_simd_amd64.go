@@ -37,6 +37,43 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
+// dot2 computes (sum_i x[i]*w0[i], sum_i x[i]*w1[i]) in one pass, sharing
+// the x loads across two Float32x16 accumulators. Used by Linear to
+// produce two adjacent output elements per iteration, halving x-row
+// bandwidth and giving the scheduler two independent FMA chains.
+//
+// All three slices must share a length.
+func dot2(x, w0, w1 []float32) (float32, float32) {
+	n := len(x)
+	if len(w0) != n || len(w1) != n {
+		panic("dot2: length mismatch")
+	}
+	acc0 := archsimd.BroadcastFloat32x16(0)
+	acc1 := archsimd.BroadcastFloat32x16(0)
+	i := 0
+	for ; i+16 <= n; i += 16 {
+		xv := archsimd.LoadFloat32x16Slice(x[i:])
+		acc0 = xv.MulAdd(archsimd.LoadFloat32x16Slice(w0[i:]), acc0)
+		acc1 = xv.MulAdd(archsimd.LoadFloat32x16Slice(w1[i:]), acc1)
+	}
+	var l0, l1 [16]float32
+	acc0.Store(&l0)
+	acc1.Store(&l1)
+	s0 := (((l0[0] + l0[1]) + (l0[2] + l0[3])) +
+		((l0[4] + l0[5]) + (l0[6] + l0[7]))) +
+		(((l0[8] + l0[9]) + (l0[10] + l0[11])) +
+			((l0[12] + l0[13]) + (l0[14] + l0[15])))
+	s1 := (((l1[0] + l1[1]) + (l1[2] + l1[3])) +
+		((l1[4] + l1[5]) + (l1[6] + l1[7]))) +
+		(((l1[8] + l1[9]) + (l1[10] + l1[11])) +
+			((l1[12] + l1[13]) + (l1[14] + l1[15])))
+	for ; i < n; i++ {
+		s0 += x[i] * w0[i]
+		s1 += x[i] * w1[i]
+	}
+	return s0, s1
+}
+
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +

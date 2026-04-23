@@ -26,6 +26,37 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
+// dot2: scalar fallback of the dual dot product.
+func dot2(x, w0, w1 []float32) (float32, float32) {
+	n := len(x)
+	if len(w0) != n || len(w1) != n {
+		panic("dot2: length mismatch")
+	}
+	var a0, a1, b0, b1, c0, c1, d0, d1 float32
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		xi0 := x[i]
+		xi1 := x[i+1]
+		xi2 := x[i+2]
+		xi3 := x[i+3]
+		a0 += xi0 * w0[i]
+		b0 += xi1 * w0[i+1]
+		c0 += xi2 * w0[i+2]
+		d0 += xi3 * w0[i+3]
+		a1 += xi0 * w1[i]
+		b1 += xi1 * w1[i+1]
+		c1 += xi2 * w1[i+2]
+		d1 += xi3 * w1[i+3]
+	}
+	s0 := (a0 + b0) + (c0 + d0)
+	s1 := (a1 + b1) + (c1 + d1)
+	for ; i < n; i++ {
+		s0 += x[i] * w0[i]
+		s1 += x[i] * w1[i]
+	}
+	return s0, s1
+}
+
 // dot: scalar fallback of the SIMD dot product. Uses 8 parallel
 // accumulators to break the reduction dependency chain.
 func dot(x, w []float32) float32 {
