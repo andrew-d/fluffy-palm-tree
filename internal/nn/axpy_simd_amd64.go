@@ -30,3 +30,28 @@ func axpy(alpha float32, x, y []float32) {
 		y[i] += alpha * x[i]
 	}
 }
+
+// dot computes sum_i x[i] * w[i] using a packed 8-lane accumulator, then
+// horizontally sums at the end. len(x) must equal len(w). Used by Linear
+// for Q/K/V + output projections, router, and the classifier head.
+func dot(x, w []float32) float32 {
+	if len(x) != len(w) {
+		panic("dot: length mismatch")
+	}
+	n := len(x)
+	acc := archsimd.BroadcastFloat32x8(0)
+	i := 0
+	for ; i+8 <= n; i += 8 {
+		xv := archsimd.LoadFloat32x8Slice(x[i:])
+		wv := archsimd.LoadFloat32x8Slice(w[i:])
+		acc = xv.MulAdd(wv, acc)
+	}
+	var lanes [8]float32
+	acc.Store(&lanes)
+	s := ((lanes[0] + lanes[1]) + (lanes[2] + lanes[3])) +
+		((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]))
+	for ; i < n; i++ {
+		s += x[i] * w[i]
+	}
+	return s
+}
