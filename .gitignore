@@ -5,3 +5,6 @@ fixtures/python_benchmark.json
 __pycache__/
 *.pyc
 *.swp
+autoresearch-results.tsv
+/model
+openai-privacy.test

@@ -7,8 +7,33 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 )
+
+// Share one loaded model across every test in this package. A fresh load
+// allocates ~5.6 GB of fp32 weights and holds them until GC; four tests each
+// doing their own load (plus `-race` overhead) blows past any sane cgroup
+// cap. One load + shared weights keeps the whole package binary in single-
+// digit GB RSS.
+var (
+	loadOnce       sync.Once
+	sharedModel    *Model
+	sharedModelErr error
+	sharedRoot     string
+)
+
+func loadSharedModel(t *testing.T) (*Model, string) {
+	t.Helper()
+	loadOnce.Do(func() {
+		sharedRoot = repoRoot(t)
+		sharedModel, sharedModelErr = LoadFromSafetensors(filepath.Join(sharedRoot, "model"))
+	})
+	if sharedModelErr != nil {
+		t.Fatalf("LoadFromSafetensors: %v", sharedModelErr)
+	}
+	return sharedModel, sharedRoot
+}
 
 // repoRoot locates the repository root by walking up from this test file
 // until we find go.mod.
@@ -94,12 +119,7 @@ func maxAbsErr(a, b []float32) (maxErr float32, idx int) {
 // TestLoadFromSafetensorsSmoke simply confirms that the loader can read the
 // full model from disk and that the layer count matches the config.
 func TestLoadFromSafetensorsSmoke(t *testing.T) {
-	root := repoRoot(t)
-	modelDir := filepath.Join(root, "model")
-	m, err := LoadFromSafetensors(modelDir)
-	if err != nil {
-		t.Fatalf("LoadFromSafetensors: %v", err)
-	}
+	m, _ := loadSharedModel(t)
 	if m.Config == nil {
 		t.Fatal("Config is nil")
 	}
@@ -130,15 +150,11 @@ func TestLoadFromSafetensorsSmoke(t *testing.T) {
 // actually compare against (embedding + layer0_attn_out) which is the
 // post-residual state before the MLP.
 func TestForwardLayer0Attn(t *testing.T) {
-	meta, root := loadFixtureMeta(t)
+	meta, _ := loadFixtureMeta(t)
 	if meta.SeqLen == 0 {
 		t.Fatal("fixture seq_len is zero")
 	}
-	modelDir := filepath.Join(root, "model")
-	m, err := LoadFromSafetensors(modelDir)
-	if err != nil {
-		t.Fatalf("LoadFromSafetensors: %v", err)
-	}
+	m, root := loadSharedModel(t)
 
 	// Seed from the fixture embedding so we isolate the attention stage.
 	embed := loadF32(t, filepath.Join(root, "fixtures", "embedding.f32.bin"))
@@ -168,15 +184,11 @@ func TestForwardLayer0Attn(t *testing.T) {
 // TestFinalHiddenAgainstFixture runs the full forward pass and compares
 // the final-norm hidden states against the fixture.
 func TestFinalHiddenAgainstFixture(t *testing.T) {
-	meta, root := loadFixtureMeta(t)
+	meta, _ := loadFixtureMeta(t)
 	if meta.SeqLen == 0 {
 		t.Fatal("fixture seq_len is zero")
 	}
-	modelDir := filepath.Join(root, "model")
-	m, err := LoadFromSafetensors(modelDir)
-	if err != nil {
-		t.Fatalf("LoadFromSafetensors: %v", err)
-	}
+	m, root := loadSharedModel(t)
 
 	hidden, T := m.ForwardFinalHidden(meta.InputIDs)
 	if T != meta.SeqLen {
@@ -199,15 +211,11 @@ func TestFinalHiddenAgainstFixture(t *testing.T) {
 // logits match the fixture AND the per-token argmax is identical to the
 // reference's pred_label_ids.
 func TestLogitsAgainstFixture(t *testing.T) {
-	meta, root := loadFixtureMeta(t)
+	meta, _ := loadFixtureMeta(t)
 	if meta.SeqLen == 0 {
 		t.Fatal("fixture seq_len is zero")
 	}
-	modelDir := filepath.Join(root, "model")
-	m, err := LoadFromSafetensors(modelDir)
-	if err != nil {
-		t.Fatalf("LoadFromSafetensors: %v", err)
-	}
+	m, root := loadSharedModel(t)
 
 	logits, T := m.Forward(meta.InputIDs)
 	if T != meta.SeqLen {
