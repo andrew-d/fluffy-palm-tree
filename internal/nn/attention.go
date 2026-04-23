@@ -31,11 +31,28 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 		yrow := y[t*out : (t+1)*out]
 		for o := 0; o < out; o++ {
 			wrow := W[o*in : (o+1)*in]
-			var s float32
+			// Eight parallel accumulators break the reduction dependency chain
+			// so the compiler can keep multiple FMA chains in flight. The bias
+			// seeds s0 so every lane starts at the same scale; the final sum
+			// folds the partials. Numerics shift within a few ULP, well inside
+			// the fixture tolerances.
+			var s0, s1, s2, s3, s4, s5, s6, s7 float32
 			if b != nil {
-				s = b[o]
+				s0 = b[o]
 			}
-			for i := 0; i < in; i++ {
+			i := 0
+			for ; i+8 <= in; i += 8 {
+				s0 += xrow[i] * wrow[i]
+				s1 += xrow[i+1] * wrow[i+1]
+				s2 += xrow[i+2] * wrow[i+2]
+				s3 += xrow[i+3] * wrow[i+3]
+				s4 += xrow[i+4] * wrow[i+4]
+				s5 += xrow[i+5] * wrow[i+5]
+				s6 += xrow[i+6] * wrow[i+6]
+				s7 += xrow[i+7] * wrow[i+7]
+			}
+			s := ((s0 + s1) + (s2 + s3)) + ((s4 + s5) + (s6 + s7))
+			for ; i < in; i++ {
 				s += xrow[i] * wrow[i]
 			}
 			yrow[o] = s
