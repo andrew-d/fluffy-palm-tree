@@ -211,11 +211,9 @@ func MoEExperts(
 	processExperts := func(workerID, startE, endE int) {
 		shard := shards[workerID]
 		// Per-worker batch scratch, grown on demand to the largest N we see.
-		// xBatchT is [D, N]: transpose of gathered input so for each d the
-		// N alphas fed to axpyBatch are a single contiguous slice — removes
-		// the N-write alpha-copy previously done inside the d loop. gatedT
-		// is [I, N] for the same reason on the down matmul.
-		var gateUpBatch, gatedBatch, outBatch, xBatchT, gatedT []float32
+		var gateUpBatch, gatedBatch, outBatch []float32
+		// Scratch for the per-iteration alpha vectors fed to axpyBatch.
+		var gateAlphas, downAlphas []float32
 		for e := startE; e < endE; e++ {
 			pairs := perExpert[e]
 			n := len(pairs)
@@ -240,17 +238,15 @@ func MoEExperts(
 			} else {
 				outBatch = outBatch[:need]
 			}
-			need = D * n
-			if cap(xBatchT) < need {
-				xBatchT = make([]float32, need)
+			if cap(gateAlphas) < n {
+				gateAlphas = make([]float32, n)
 			} else {
-				xBatchT = xBatchT[:need]
+				gateAlphas = gateAlphas[:n]
 			}
-			need = I * n
-			if cap(gatedT) < need {
-				gatedT = make([]float32, need)
+			if cap(downAlphas) < n {
+				downAlphas = make([]float32, n)
 			} else {
-				gatedT = gatedT[:need]
+				downAlphas = downAlphas[:n]
 			}
 
 			projBase := e * expertStride
@@ -258,25 +254,21 @@ func MoEExperts(
 			downBase := e * downStride
 			dbBase := e * D
 
-			// Gather+transpose inputs once per expert so the d-outer loop
-			// can feed axpyBatch a contiguous alpha slice.
-			for k, p := range pairs {
-				src := hidden[p.t*D : (p.t+1)*D]
-				for d := 0; d < D; d++ {
-					xBatchT[d*n+k] = src[d]
-				}
-			}
-
 			// Seed each row of gateUpBatch with the expert's bias.
 			for k := 0; k < n; k++ {
 				copy(gateUpBatch[k*twoI:(k+1)*twoI],
 					gateUpBias[biasBase:biasBase+twoI])
 			}
 
-			// Batched gate-up matmul.
+			// Batched gate-up: each d loads wRow once and fans out over the
+			// N assigned tokens via axpyBatch (saves N function calls per d
+			// and hoists the wRow load to the outer iteration).
 			for d := 0; d < D; d++ {
 				wRow := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
-				axpyBatch(xBatchT[d*n:(d+1)*n], wRow, gateUpBatch, twoI)
+				for k, p := range pairs {
+					gateAlphas[k] = hidden[p.t*D+d]
+				}
+				axpyBatch(gateAlphas, wRow, gateUpBatch, twoI)
 			}
 
 			// Activation per batched token.
@@ -288,20 +280,16 @@ func MoEExperts(
 				)
 			}
 
-			// Transpose gated for the same reason on the down matmul.
-			for k := 0; k < n; k++ {
-				for i := 0; i < I; i++ {
-					gatedT[i*n+k] = gatedBatch[k*I+i]
-				}
-			}
-
 			// Seed outBatch with downBias, then batched down matmul.
 			for k := 0; k < n; k++ {
 				copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
 			}
 			for i := 0; i < I; i++ {
 				wRow := downProj[downBase+i*D : downBase+(i+1)*D]
-				axpyBatch(gatedT[i*n:(i+1)*n], wRow, outBatch, D)
+				for k := 0; k < n; k++ {
+					downAlphas[k] = gatedBatch[k*I+i]
+				}
+				axpyBatch(downAlphas, wRow, outBatch, D)
 			}
 
 			// Scatter-add weighted outputs into this worker's shard.
