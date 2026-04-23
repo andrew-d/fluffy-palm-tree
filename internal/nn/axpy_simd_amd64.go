@@ -94,6 +94,51 @@ func axpyBatch2(alphas0, alphas1 []float32, wRow0, wRow1 []float32, y []float32,
 	}
 }
 
+// axpyBatch4 fuses four adjacent "d" iterations. Each 16-wide gateUp/out
+// block incurs ONE load + ONE store per four d-steps instead of four.
+// Further cuts MoE store traffic beyond axpyBatch2's 2× reduction.
+//
+// y[k][i:+16] += sum_s alphas[s][k]*wRows[s][i:+16] for s in 0..3.
+func axpyBatch4(alphas0, alphas1, alphas2, alphas3 []float32, wRow0, wRow1, wRow2, wRow3 []float32, y []float32, stride int) {
+	n := len(alphas0)
+	w := len(wRow0)
+	i := 0
+	for ; i+16 <= w; i += 16 {
+		wv0 := archsimd.LoadFloat32x16Slice(wRow0[i:])
+		wv1 := archsimd.LoadFloat32x16Slice(wRow1[i:])
+		wv2 := archsimd.LoadFloat32x16Slice(wRow2[i:])
+		wv3 := archsimd.LoadFloat32x16Slice(wRow3[i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x16Slice(y[off:])
+			yv = archsimd.BroadcastFloat32x16(alphas0[k]).MulAdd(wv0, yv)
+			yv = archsimd.BroadcastFloat32x16(alphas1[k]).MulAdd(wv1, yv)
+			yv = archsimd.BroadcastFloat32x16(alphas2[k]).MulAdd(wv2, yv)
+			yv = archsimd.BroadcastFloat32x16(alphas3[k]).MulAdd(wv3, yv)
+			yv.StoreSlice(y[off:])
+		}
+	}
+	// Tail: fall back to axpyBatch2 + axpyBatch on the remainder rather
+	// than repeating the 8-wide / scalar spaghetti.
+	if i < w {
+		rem0 := wRow0[i:]
+		rem1 := wRow1[i:]
+		rem2 := wRow2[i:]
+		rem3 := wRow3[i:]
+		// scalar tail (uncommon on our shapes)
+		for j := 0; j < len(rem0); j++ {
+			w0 := rem0[j]
+			w1 := rem1[j]
+			w2 := rem2[j]
+			w3 := rem3[j]
+			for k := 0; k < n; k++ {
+				y[k*stride+i+j] += alphas0[k]*w0 + alphas1[k]*w1 +
+					alphas2[k]*w2 + alphas3[k]*w3
+			}
+		}
+	}
+}
+
 // axpy computes y[i] += alpha * x[i] for i in [0, len(x)). Requires
 // len(x) == len(y). The body issues VFMADD231PS via simd/archsimd so a
 // single instruction processes 16 fp32s (AVX-512) or 8 fp32s (AVX2); the
