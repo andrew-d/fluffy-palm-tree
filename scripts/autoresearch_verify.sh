@@ -27,7 +27,7 @@ cd "$(dirname "$0")/.."
 out=$(systemd-run --user --scope --quiet \
     -p MemoryMax=14G -p MemorySwapMax=0 \
     env GOAMD64=v3 GOEXPERIMENT=simd \
-    go test -p=1 -pgo=default.pgo -run='^$' -bench='^BenchmarkClassifyMedium$' \
+    go test -p=1 -run='^$' -bench='^BenchmarkClassifyMedium$' \
     -benchtime=3x -count=3 . 2>&1)
 
 # Each matching line looks like:
