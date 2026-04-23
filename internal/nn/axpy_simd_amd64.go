@@ -223,24 +223,26 @@ func axpyBatch16(
 		wv15 := archsimd.LoadFloat32x16Slice(w[15][i:])
 		for k := 0; k < n; k++ {
 			off := k*stride + i
+			// Four parallel accumulator chains to break the 16-deep FMA
+			// dependency: each chain length 4 + a final tree-reduce.
 			yv := archsimd.LoadFloat32x16Slice(y[off:])
-			yv = archsimd.BroadcastFloat32x16(a[0][k]).MulAdd(wv0, yv)
-			yv = archsimd.BroadcastFloat32x16(a[1][k]).MulAdd(wv1, yv)
-			yv = archsimd.BroadcastFloat32x16(a[2][k]).MulAdd(wv2, yv)
-			yv = archsimd.BroadcastFloat32x16(a[3][k]).MulAdd(wv3, yv)
-			yv = archsimd.BroadcastFloat32x16(a[4][k]).MulAdd(wv4, yv)
-			yv = archsimd.BroadcastFloat32x16(a[5][k]).MulAdd(wv5, yv)
-			yv = archsimd.BroadcastFloat32x16(a[6][k]).MulAdd(wv6, yv)
-			yv = archsimd.BroadcastFloat32x16(a[7][k]).MulAdd(wv7, yv)
-			yv = archsimd.BroadcastFloat32x16(a[8][k]).MulAdd(wv8, yv)
-			yv = archsimd.BroadcastFloat32x16(a[9][k]).MulAdd(wv9, yv)
-			yv = archsimd.BroadcastFloat32x16(a[10][k]).MulAdd(wv10, yv)
-			yv = archsimd.BroadcastFloat32x16(a[11][k]).MulAdd(wv11, yv)
-			yv = archsimd.BroadcastFloat32x16(a[12][k]).MulAdd(wv12, yv)
-			yv = archsimd.BroadcastFloat32x16(a[13][k]).MulAdd(wv13, yv)
-			yv = archsimd.BroadcastFloat32x16(a[14][k]).MulAdd(wv14, yv)
-			yv = archsimd.BroadcastFloat32x16(a[15][k]).MulAdd(wv15, yv)
-			yv.StoreSlice(y[off:])
+			acc0 := archsimd.BroadcastFloat32x16(a[0][k]).MulAdd(wv0,
+				archsimd.BroadcastFloat32x16(a[1][k]).Mul(wv1))
+			acc1 := archsimd.BroadcastFloat32x16(a[2][k]).MulAdd(wv2,
+				archsimd.BroadcastFloat32x16(a[3][k]).Mul(wv3))
+			acc2 := archsimd.BroadcastFloat32x16(a[4][k]).MulAdd(wv4,
+				archsimd.BroadcastFloat32x16(a[5][k]).Mul(wv5))
+			acc3 := archsimd.BroadcastFloat32x16(a[6][k]).MulAdd(wv6,
+				archsimd.BroadcastFloat32x16(a[7][k]).Mul(wv7))
+			acc0 = archsimd.BroadcastFloat32x16(a[8][k]).MulAdd(wv8, acc0)
+			acc1 = archsimd.BroadcastFloat32x16(a[9][k]).MulAdd(wv9, acc1)
+			acc2 = archsimd.BroadcastFloat32x16(a[10][k]).MulAdd(wv10, acc2)
+			acc3 = archsimd.BroadcastFloat32x16(a[11][k]).MulAdd(wv11, acc3)
+			acc0 = archsimd.BroadcastFloat32x16(a[12][k]).MulAdd(wv12, acc0)
+			acc1 = archsimd.BroadcastFloat32x16(a[13][k]).MulAdd(wv13, acc1)
+			acc2 = archsimd.BroadcastFloat32x16(a[14][k]).MulAdd(wv14, acc2)
+			acc3 = archsimd.BroadcastFloat32x16(a[15][k]).MulAdd(wv15, acc3)
+			yv.Add(acc0.Add(acc1).Add(acc2.Add(acc3))).StoreSlice(y[off:])
 		}
 	}
 	if i < width {
