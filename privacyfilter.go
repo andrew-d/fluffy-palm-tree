@@ -54,6 +54,12 @@ func LoadModel(dir string) (*Model, error) {
 	return &Model{tok: tok, inner: inner}, nil
 }
 
+// TokenCount returns the number of model tokens that would be produced by
+// tokenizing text. Useful for estimating throughput or cost.
+func (m *Model) TokenCount(text string) int {
+	return len(m.tok.Encode(text))
+}
+
 // Classify runs the model on text and returns the detected PII spans,
 // aggregated from the per-token BIOES label predictions.
 func (m *Model) Classify(text string) ([]Entity, error) {

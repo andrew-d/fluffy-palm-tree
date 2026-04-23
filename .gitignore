@@ -1,5 +1,7 @@
 .venv/
 /model/
 fixtures/*.bin
+fixtures/python_benchmark.json
 __pycache__/
 *.pyc
+*.swp
