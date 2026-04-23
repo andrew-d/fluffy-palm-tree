@@ -293,7 +293,7 @@ func GQAAttentionWithSinks(
 		}
 	}
 
-	nWorkers := runtime.GOMAXPROCS(0)
+	nWorkers := 2 * runtime.GOMAXPROCS(0)
 	if nWorkers > numQ {
 		nWorkers = numQ
 	}
