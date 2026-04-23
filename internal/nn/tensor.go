@@ -28,20 +28,20 @@ func RMSNorm(x []float32, weight []float32, T, D int, eps float32) []float32 {
 		panic("RMSNorm: weight length mismatch")
 	}
 	out := make([]float32, T*D)
-	epsd := float64(eps)
+	epsf := float64(eps)
+	invD := 1.0 / float64(D)
 	for t := 0; t < T; t++ {
 		row := x[t*D : (t+1)*D]
-		// Mean of squares in fp64 to keep the reduction precise; the final
-		// per-element multiply is still in fp32.
-		var ss float64
+		// Mean of squares in fp32 (one pass).
+		var ss float32
 		for i := 0; i < D; i++ {
-			v := float64(row[i])
+			v := row[i]
 			ss += v * v
 		}
-		rms := 1.0 / math.Sqrt(ss/float64(D)+epsd)
+		rms := float32(1.0 / math.Sqrt(float64(ss)*invD+epsf))
 		dst := out[t*D : (t+1)*D]
 		for i := 0; i < D; i++ {
-			dst[i] = float32(float64(row[i]) * rms * float64(weight[i]))
+			dst[i] = row[i] * rms * weight[i]
 		}
 	}
 	return out
