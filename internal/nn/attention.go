@@ -38,15 +38,28 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 
 	processChunk := func(oStart, oEnd int) {
 		// o outer, t inner: wrow is loaded once per o and reused across
-		// all T tokens. Beats the previous t-outer/o-inner order, which
-		// streamed the full W matrix once per token.
+		// all T tokens. dotBatch8 amortizes the wRow load across 8 parallel
+		// accumulators so the scheduler has 8 independent FMA chains in
+		// flight.
 		for o := oStart; o < oEnd; o++ {
 			wrow := W[o*in : (o+1)*in]
 			var bias float32
 			if b != nil {
 				bias = b[o]
 			}
-			for t := 0; t < T; t++ {
+			t := 0
+			for ; t+8 <= T; t += 8 {
+				var xs [8][]float32
+				for s := 0; s < 8; s++ {
+					ts := t + s
+					xs[s] = x[ts*in : (ts+1)*in]
+				}
+				r := dotBatch8(wrow, xs)
+				for s := 0; s < 8; s++ {
+					y[(t+s)*out+o] = r[s] + bias
+				}
+			}
+			for ; t < T; t++ {
 				y[t*out+o] = dot(x[t*in:(t+1)*in], wrow) + bias
 			}
 		}

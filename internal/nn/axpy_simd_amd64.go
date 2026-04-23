@@ -425,6 +425,51 @@ func moeActivation(gateUp, gated []float32, I int, limit, alpha float32) {
 	}
 }
 
+// dotBatch8 computes 8 dot products against the same w row, sharing the
+// w loads across 8 parallel Float32x16 accumulators. Used by Linear to
+// amortize wRow bandwidth across 8 adjacent tokens per output column.
+func dotBatch8(w []float32, xs [8][]float32) [8]float32 {
+	var acc0, acc1, acc2, acc3, acc4, acc5, acc6, acc7 archsimd.Float32x16
+	acc0 = archsimd.BroadcastFloat32x16(0)
+	acc1 = archsimd.BroadcastFloat32x16(0)
+	acc2 = archsimd.BroadcastFloat32x16(0)
+	acc3 = archsimd.BroadcastFloat32x16(0)
+	acc4 = archsimd.BroadcastFloat32x16(0)
+	acc5 = archsimd.BroadcastFloat32x16(0)
+	acc6 = archsimd.BroadcastFloat32x16(0)
+	acc7 = archsimd.BroadcastFloat32x16(0)
+	n := len(w)
+	i := 0
+	for ; i+16 <= n; i += 16 {
+		wv := archsimd.LoadFloat32x16Slice(w[i:])
+		acc0 = archsimd.LoadFloat32x16Slice(xs[0][i:]).MulAdd(wv, acc0)
+		acc1 = archsimd.LoadFloat32x16Slice(xs[1][i:]).MulAdd(wv, acc1)
+		acc2 = archsimd.LoadFloat32x16Slice(xs[2][i:]).MulAdd(wv, acc2)
+		acc3 = archsimd.LoadFloat32x16Slice(xs[3][i:]).MulAdd(wv, acc3)
+		acc4 = archsimd.LoadFloat32x16Slice(xs[4][i:]).MulAdd(wv, acc4)
+		acc5 = archsimd.LoadFloat32x16Slice(xs[5][i:]).MulAdd(wv, acc5)
+		acc6 = archsimd.LoadFloat32x16Slice(xs[6][i:]).MulAdd(wv, acc6)
+		acc7 = archsimd.LoadFloat32x16Slice(xs[7][i:]).MulAdd(wv, acc7)
+	}
+	accs := [8]archsimd.Float32x16{acc0, acc1, acc2, acc3, acc4, acc5, acc6, acc7}
+	var result [8]float32
+	for s := 0; s < 8; s++ {
+		var lanes [16]float32
+		accs[s].Store(&lanes)
+		result[s] = (((lanes[0]+lanes[1])+(lanes[2]+lanes[3]))+
+			((lanes[4]+lanes[5])+(lanes[6]+lanes[7]))) +
+			(((lanes[8]+lanes[9])+(lanes[10]+lanes[11]))+
+				((lanes[12]+lanes[13])+(lanes[14]+lanes[15])))
+	}
+	for ; i < n; i++ {
+		wi := w[i]
+		for s := 0; s < 8; s++ {
+			result[s] += xs[s][i] * wi
+		}
+	}
+	return result
+}
+
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +

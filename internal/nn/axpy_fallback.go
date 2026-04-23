@@ -152,6 +152,19 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
+// dotBatch8: scalar fallback of the 8-token batched dot product.
+func dotBatch8(w []float32, xs [8][]float32) [8]float32 {
+	var result [8]float32
+	n := len(w)
+	for i := 0; i < n; i++ {
+		wi := w[i]
+		for s := 0; s < 8; s++ {
+			result[s] += xs[s][i] * wi
+		}
+	}
+	return result
+}
+
 // dot: scalar fallback of the SIMD dot product. Uses 8 parallel
 // accumulators to break the reduction dependency chain.
 func dot(x, w []float32) float32 {
