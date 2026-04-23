@@ -31,7 +31,7 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 	// streams out/nWorkers weight rows (~2.3 MB / 8 ≈ 290 KB for the Q
 	// projection) instead of the full W. The shared x (780 KB for
 	// T=306, in=640) stays hot in L3 across workers.
-	nWorkers := runtime.GOMAXPROCS(0)
+	nWorkers := 2 * runtime.GOMAXPROCS(0)
 	if nWorkers > out {
 		nWorkers = out
 	}
