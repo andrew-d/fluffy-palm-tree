@@ -203,7 +203,17 @@ func MoEExperts(
 				}
 				rowBase := projBase + d*twoI
 				row := gateUpProj[rowBase : rowBase+twoI]
-				for j := 0; j < twoI; j++ {
+				// Unroll by 4 so the compiler can emit independent FMA chains
+				// and more easily vectorize. twoI is 1280 on the current model
+				// (divisible by 4); the tail loop handles any residual.
+				j := 0
+				for ; j <= twoI-4; j += 4 {
+					gateUp[j] += s * row[j]
+					gateUp[j+1] += s * row[j+1]
+					gateUp[j+2] += s * row[j+2]
+					gateUp[j+3] += s * row[j+3]
+				}
+				for ; j < twoI; j++ {
 					gateUp[j] += s * row[j]
 				}
 			}
@@ -236,7 +246,14 @@ func MoEExperts(
 				w := weight * gi
 				rowBase := downBase + i*D
 				row := downProj[rowBase : rowBase+D]
-				for d := 0; d < D; d++ {
+				d := 0
+				for ; d <= D-4; d += 4 {
+					accumRow[d] += w * row[d]
+					accumRow[d+1] += w * row[d+1]
+					accumRow[d+2] += w * row[d+2]
+					accumRow[d+3] += w * row[d+3]
+				}
+				for ; d < D; d++ {
 					accumRow[d] += w * row[d]
 				}
 			}
