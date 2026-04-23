@@ -26,17 +26,6 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
-// axpy2: scalar fallback of the fused two-row FMA.
-func axpy2(a0, a1 float32, x0, x1, y []float32) {
-	n := len(y)
-	if len(x0) != n || len(x1) != n {
-		panic("axpy2: length mismatch")
-	}
-	for i := 0; i < n; i++ {
-		y[i] += a0*x0[i] + a1*x1[i]
-	}
-}
-
 // dot: scalar fallback of the SIMD dot product. Uses 8 parallel
 // accumulators to break the reduction dependency chain.
 func dot(x, w []float32) float32 {

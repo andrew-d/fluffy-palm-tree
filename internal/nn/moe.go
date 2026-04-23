@@ -193,25 +193,14 @@ func MoEExperts(
 			weight := routerScores[t*topK+kPos]
 
 			// gate_up = state @ gate_up_proj[e] + gate_up_bias[e]   # [2*I]
-			// Pairs of input-dim rows share each gateUp-block load/store
-			// via axpy2; serves as the axpy-inner equivalent of a 2-way
-			// unroll on d.
 			projBase := e * expertStride
 			biasBase := e * twoI
 			copy(gateUp, gateUpBias[biasBase:biasBase+twoI])
-			d := 0
-			for ; d+2 <= D; d += 2 {
-				s0 := state[d]
-				s1 := state[d+1]
-				rowBase0 := projBase + d*twoI
-				rowBase1 := rowBase0 + twoI
-				axpy2(s0, s1,
-					gateUpProj[rowBase0:rowBase0+twoI],
-					gateUpProj[rowBase1:rowBase1+twoI],
-					gateUp)
-			}
-			for ; d < D; d++ {
+			for d := 0; d < D; d++ {
 				s := state[d]
+				if s == 0 {
+					continue
+				}
 				rowBase := projBase + d*twoI
 				axpy(s, gateUpProj[rowBase:rowBase+twoI], gateUp)
 			}
@@ -234,25 +223,13 @@ func MoEExperts(
 			}
 
 			// out = gated @ downProj[e] + downBias[e]  # [D]
-			// Fuse pairs of input-dim rows with axpy2 so each accumRow
-			// block-load is shared across two FMAs.
 			downBase := e * downStride
 			dbBase := e * D
-			i := 0
-			for ; i+2 <= I; i += 2 {
-				gi0 := gated[i]
-				gi1 := gated[i+1]
-				w0 := weight * gi0
-				w1 := weight * gi1
-				rowBase0 := downBase + i*D
-				rowBase1 := rowBase0 + D
-				axpy2(w0, w1,
-					downProj[rowBase0:rowBase0+D],
-					downProj[rowBase1:rowBase1+D],
-					accumRow)
-			}
-			for ; i < I; i++ {
+			for i := 0; i < I; i++ {
 				gi := gated[i]
+				if gi == 0 {
+					continue
+				}
 				w := weight * gi
 				rowBase := downBase + i*D
 				axpy(w, downProj[rowBase:rowBase+D], accumRow)
