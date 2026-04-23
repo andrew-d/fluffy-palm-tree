@@ -272,14 +272,9 @@ func MoEExperts(
 			downBase := e * downStride
 			dbBase := e * D
 
-			// Seed each row of gateUpBatch with the expert's bias.
-			for k := 0; k < n; k++ {
-				copy(gateUpBatch[k*twoI:(k+1)*twoI],
-					gateUpBias[biasBase:biasBase+twoI])
-			}
-
 			// Batched gate-up: fuse up to sixteen d-iterations per gateUp
-			// block. Tail cascades down the fused-batch ladder.
+			// block. First d=0..15 call seeds from bias (skipping the
+			// separate bias-copy pass). Subsequent calls accumulate into y.
 			var ga [16][]float32
 			for s := 0; s < 16; s++ {
 				ga[s] = gateAlphas[s*n : (s+1)*n]
@@ -287,7 +282,28 @@ func MoEExperts(
 			gwRow := func(d int) []float32 {
 				return gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
 			}
+			biasSlice := gateUpBias[biasBase : biasBase+twoI]
 			d := 0
+			if d+16 <= D {
+				for k, p := range pairs {
+					base := p.t * D
+					for s := 0; s < 16; s++ {
+						ga[s][k] = hidden[base+d+s]
+					}
+				}
+				var ws [16][]float32
+				for s := 0; s < 16; s++ {
+					ws[s] = gwRow(d + s)
+				}
+				axpyBatch16Seed(ga, ws, biasSlice, gateUpBatch, twoI)
+				d += 16
+			} else {
+				// D < 16: seed directly by copying bias, fall through to
+				// the sub-16 tails below.
+				for k := 0; k < n; k++ {
+					copy(gateUpBatch[k*twoI:(k+1)*twoI], biasSlice)
+				}
+			}
 			for ; d+16 <= D; d += 16 {
 				for k, p := range pairs {
 					base := p.t * D
