@@ -222,41 +222,43 @@ func axpyBatch16(
 		wv14 := archsimd.LoadFloat32x16Slice(w[14][i:])
 		wv15 := archsimd.LoadFloat32x16Slice(w[15][i:])
 		k := 0
-		for ; k+4 <= n; k += 4 {
-			off0 := k*stride + i
-			off1 := (k+1)*stride + i
-			off2 := (k+2)*stride + i
-			off3 := (k+3)*stride + i
-			yv0 := archsimd.LoadFloat32x16Slice(y[off0:])
-			yv1 := archsimd.LoadFloat32x16Slice(y[off1:])
-			yv2 := archsimd.LoadFloat32x16Slice(y[off2:])
-			yv3 := archsimd.LoadFloat32x16Slice(y[off3:])
-			for s, wvCur := range [16]archsimd.Float32x16{
-				wv0, wv1, wv2, wv3, wv4, wv5, wv6, wv7,
-				wv8, wv9, wv10, wv11, wv12, wv13, wv14, wv15,
-			} {
-				yv0 = archsimd.BroadcastFloat32x16(a[s][k]).MulAdd(wvCur, yv0)
-				yv1 = archsimd.BroadcastFloat32x16(a[s][k+1]).MulAdd(wvCur, yv1)
-				yv2 = archsimd.BroadcastFloat32x16(a[s][k+2]).MulAdd(wvCur, yv2)
-				yv3 = archsimd.BroadcastFloat32x16(a[s][k+3]).MulAdd(wvCur, yv3)
-			}
-			yv0.StoreSlice(y[off0:])
-			yv1.StoreSlice(y[off1:])
-			yv2.StoreSlice(y[off2:])
-			yv3.StoreSlice(y[off3:])
-		}
 		for ; k+2 <= n; k += 2 {
 			off0 := k*stride + i
 			off1 := (k+1)*stride + i
 			yv0 := archsimd.LoadFloat32x16Slice(y[off0:])
 			yv1 := archsimd.LoadFloat32x16Slice(y[off1:])
-			for s, wvCur := range [16]archsimd.Float32x16{
-				wv0, wv1, wv2, wv3, wv4, wv5, wv6, wv7,
-				wv8, wv9, wv10, wv11, wv12, wv13, wv14, wv15,
-			} {
-				yv0 = archsimd.BroadcastFloat32x16(a[s][k]).MulAdd(wvCur, yv0)
-				yv1 = archsimd.BroadcastFloat32x16(a[s][k+1]).MulAdd(wvCur, yv1)
-			}
+			yv0 = archsimd.BroadcastFloat32x16(a[0][k]).MulAdd(wv0, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[0][k+1]).MulAdd(wv0, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[1][k]).MulAdd(wv1, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[1][k+1]).MulAdd(wv1, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[2][k]).MulAdd(wv2, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[2][k+1]).MulAdd(wv2, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[3][k]).MulAdd(wv3, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[3][k+1]).MulAdd(wv3, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[4][k]).MulAdd(wv4, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[4][k+1]).MulAdd(wv4, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[5][k]).MulAdd(wv5, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[5][k+1]).MulAdd(wv5, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[6][k]).MulAdd(wv6, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[6][k+1]).MulAdd(wv6, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[7][k]).MulAdd(wv7, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[7][k+1]).MulAdd(wv7, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[8][k]).MulAdd(wv8, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[8][k+1]).MulAdd(wv8, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[9][k]).MulAdd(wv9, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[9][k+1]).MulAdd(wv9, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[10][k]).MulAdd(wv10, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[10][k+1]).MulAdd(wv10, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[11][k]).MulAdd(wv11, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[11][k+1]).MulAdd(wv11, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[12][k]).MulAdd(wv12, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[12][k+1]).MulAdd(wv12, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[13][k]).MulAdd(wv13, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[13][k+1]).MulAdd(wv13, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[14][k]).MulAdd(wv14, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[14][k+1]).MulAdd(wv14, yv1)
+			yv0 = archsimd.BroadcastFloat32x16(a[15][k]).MulAdd(wv15, yv0)
+			yv1 = archsimd.BroadcastFloat32x16(a[15][k+1]).MulAdd(wv15, yv1)
 			yv0.StoreSlice(y[off0:])
 			yv1.StoreSlice(y[off1:])
 		}
