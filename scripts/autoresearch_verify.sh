@@ -18,8 +18,13 @@ cd "$(dirname "$0")/.."
 #
 # -p=1 serializes package test binaries so we never have two model loads in
 # flight at once — the full test tree OOMs at parallel=N otherwise.
+# GOAMD64=v3 targets Haswell-and-later (AVX2 + FMA3) so the compiler can
+# emit VFMADD instructions in the tight matmul loops. The host CPU (Xeon
+# Platinum 8259CL) supports AVX-512; v3 is conservatively compatible and
+# is the sweet spot for Go's backend today.
 out=$(systemd-run --user --scope --quiet \
     -p MemoryMax=14G -p MemorySwapMax=0 \
+    env GOAMD64=v3 \
     go test -p=1 -run='^$' -bench='^BenchmarkClassifyMedium$' \
     -benchtime=3x -count=3 . 2>&1)
 
