@@ -212,6 +212,8 @@ func MoEExperts(
 		shard := shards[workerID]
 		// Per-worker batch scratch, grown on demand to the largest N we see.
 		var gateUpBatch, gatedBatch, outBatch []float32
+		// Scratch for the per-iteration alpha vectors fed to axpyBatch.
+		var gateAlphas, downAlphas []float32
 		for e := startE; e < endE; e++ {
 			pairs := perExpert[e]
 			n := len(pairs)
@@ -236,6 +238,16 @@ func MoEExperts(
 			} else {
 				outBatch = outBatch[:need]
 			}
+			if cap(gateAlphas) < n {
+				gateAlphas = make([]float32, n)
+			} else {
+				gateAlphas = gateAlphas[:n]
+			}
+			if cap(downAlphas) < n {
+				downAlphas = make([]float32, n)
+			} else {
+				downAlphas = downAlphas[:n]
+			}
 
 			projBase := e * expertStride
 			biasBase := e * twoI
@@ -248,15 +260,15 @@ func MoEExperts(
 					gateUpBias[biasBase:biasBase+twoI])
 			}
 
-			// Batched gate-up matmul. Inner loop order is (d outer, k inner)
-			// so each 5 KB row of gateUpProj is loaded ONCE from DRAM and
-			// reused across all n assigned tokens.
+			// Batched gate-up: each d loads wRow once and fans out over the
+			// N assigned tokens via axpyBatch (saves N function calls per d
+			// and hoists the wRow load to the outer iteration).
 			for d := 0; d < D; d++ {
 				wRow := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
 				for k, p := range pairs {
-					s := hidden[p.t*D+d]
-					axpy(s, wRow, gateUpBatch[k*twoI:(k+1)*twoI])
+					gateAlphas[k] = hidden[p.t*D+d]
 				}
+				axpyBatch(gateAlphas, wRow, gateUpBatch, twoI)
 			}
 
 			// Activation per batched token.
@@ -268,17 +280,16 @@ func MoEExperts(
 				)
 			}
 
-			// Seed outBatch with downBias, then batched down matmul with
-			// the same d-outer/k-inner reuse pattern.
+			// Seed outBatch with downBias, then batched down matmul.
 			for k := 0; k < n; k++ {
 				copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
 			}
 			for i := 0; i < I; i++ {
 				wRow := downProj[downBase+i*D : downBase+(i+1)*D]
-				for k := range pairs {
-					s := gatedBatch[k*I+i]
-					axpy(s, wRow, outBatch[k*D:(k+1)*D])
+				for k := 0; k < n; k++ {
+					downAlphas[k] = gatedBatch[k*I+i]
 				}
+				axpyBatch(downAlphas, wRow, outBatch, D)
 			}
 
 			// Scatter-add weighted outputs into this worker's shard.

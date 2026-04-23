@@ -44,6 +44,19 @@ func moeActivation(gateUp, gated []float32, I int, limit, alpha float32) {
 	}
 }
 
+// axpyBatch: scalar fallback of the SIMD batched axpy.
+func axpyBatch(alphas []float32, wRow []float32, y []float32, stride int) {
+	n := len(alphas)
+	w := len(wRow)
+	for k := 0; k < n; k++ {
+		alpha := alphas[k]
+		off := k * stride
+		for i := 0; i < w; i++ {
+			y[off+i] += alpha * wRow[i]
+		}
+	}
+}
+
 // axpy: scalar fallback used when goexperiment.simd is off or we're not
 // on amd64. Unrolled by 8 to match the hot-path layout; the SIMD variant
 // in axpy_simd_amd64.go is drop-in equivalent.

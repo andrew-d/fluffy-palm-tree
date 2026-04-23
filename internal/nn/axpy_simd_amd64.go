@@ -7,6 +7,46 @@ import (
 	"simd/archsimd"
 )
 
+// axpyBatch fans out a single wRow across N output buffers. Each y[k]
+// gets y[k][i] += alphas[k] * wRow[i] for i in [0, len(wRow)). Equivalent
+// to calling axpy N times with the same wRow; the combined form hoists
+// one wRow load into the outer loop so the scheduler sees a cleaner
+// sequence of independent FMAs and skips per-call frame overhead.
+//
+// y must hold N*stride floats; each y[k] occupies offsets [k*stride,
+// k*stride+len(wRow)). strides larger than len(wRow) are fine (caller
+// pads between buffers).
+func axpyBatch(alphas []float32, wRow []float32, y []float32, stride int) {
+	n := len(alphas)
+	w := len(wRow)
+	i := 0
+	for ; i+16 <= w; i += 16 {
+		wv := archsimd.LoadFloat32x16Slice(wRow[i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x16Slice(y[off:])
+			a := archsimd.BroadcastFloat32x16(alphas[k])
+			a.MulAdd(wv, yv).StoreSlice(y[off:])
+		}
+	}
+	if i+8 <= w {
+		wv := archsimd.LoadFloat32x8Slice(wRow[i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x8Slice(y[off:])
+			a := archsimd.BroadcastFloat32x8(alphas[k])
+			a.MulAdd(wv, yv).StoreSlice(y[off:])
+		}
+		i += 8
+	}
+	for ; i < w; i++ {
+		wi := wRow[i]
+		for k := 0; k < n; k++ {
+			y[k*stride+i] += alphas[k] * wi
+		}
+	}
+}
+
 // axpy computes y[i] += alpha * x[i] for i in [0, len(x)). Requires
 // len(x) == len(y). The body issues VFMADD231PS via simd/archsimd so a
 // single instruction processes 16 fp32s (AVX-512) or 8 fp32s (AVX2); the
