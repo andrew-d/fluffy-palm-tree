@@ -54,7 +54,9 @@ func Add(a, b []float32) []float32 {
 		panic("Add: length mismatch")
 	}
 	out := make([]float32, len(a))
-	addFused(a, b, out)
+	for i := range a {
+		out[i] = a[i] + b[i]
+	}
 	return out
 }
 

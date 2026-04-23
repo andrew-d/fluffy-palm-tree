@@ -644,29 +644,6 @@ func linearTile4x4(x []float32, W []float32, y []float32, in, out, tOff, oOff in
 	y[(tOff+3)*out+oOff+3] = hsum(a33) + b3
 }
 
-// addFused fills out[i] = a[i] + b[i] in one SIMD pass (no intermediate
-// copy+inplace split). Used by Add() for residual additions.
-func addFused(a, b, out []float32) {
-	n := len(a)
-	i := 0
-	for ; i+32 <= n; i += 32 {
-		av0 := archsimd.LoadFloat32x16Slice(a[i:])
-		bv0 := archsimd.LoadFloat32x16Slice(b[i:])
-		av1 := archsimd.LoadFloat32x16Slice(a[i+16:])
-		bv1 := archsimd.LoadFloat32x16Slice(b[i+16:])
-		av0.Add(bv0).StoreSlice(out[i:])
-		av1.Add(bv1).StoreSlice(out[i+16:])
-	}
-	for ; i+16 <= n; i += 16 {
-		av := archsimd.LoadFloat32x16Slice(a[i:])
-		bv := archsimd.LoadFloat32x16Slice(b[i:])
-		av.Add(bv).StoreSlice(out[i:])
-	}
-	for ; i < n; i++ {
-		out[i] = a[i] + b[i]
-	}
-}
-
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +
