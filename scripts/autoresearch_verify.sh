@@ -26,7 +26,7 @@ cd "$(dirname "$0")/.."
 # rather than the scalar VFMADD231SS the compiler falls back to otherwise.
 out=$(systemd-run --user --scope --quiet \
     -p MemoryMax=14G -p MemorySwapMax=0 \
-    env GOAMD64=v3 GOEXPERIMENT=simd GOGC=500 \
+    env GOAMD64=v3 GOEXPERIMENT=simd \
     go test -p=1 -run='^$' -bench='^BenchmarkClassifyMedium$' \
     -benchtime=3x -count=3 . 2>&1)
 
