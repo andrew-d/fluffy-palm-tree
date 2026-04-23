@@ -272,95 +272,70 @@ func MoEExperts(
 			downBase := e * downStride
 			dbBase := e * D
 
-			// Batched gate-up:
-			//   - Tile path: BLIS-style 4×64 C-tile (16 Float32x16 accumulators
-			//     live across the entire D reduction). 2I=1280 is a clean
-			//     multiple of 64 on the current model so the j-tail is empty.
-			//   - Tail path: for the up to three leftover tokens (n % 4), fall
-			//     through to the axpyBatch cascade on just that subset.
-			tileEnd := (n / 4) * 4
-			for t0 := 0; t0 < tileEnd; t0 += 4 {
-				a0 := pairs[t0+0].t * D
-				a1 := pairs[t0+1].t * D
-				a2 := pairs[t0+2].t * D
-				a3 := pairs[t0+3].t * D
-				cBase := t0 * twoI
-				for j0 := 0; j0+64 <= twoI; j0 += 64 {
-					moeGemmTile4x4(
-						hidden, a0, a1, a2, a3, 1,
-						gateUpProj, projBase, twoI,
-						gateUpBias[biasBase:biasBase+twoI], j0,
-						D,
-						gateUpBatch, cBase, twoI,
-					)
-				}
+			// Seed each row of gateUpBatch with the expert's bias.
+			for k := 0; k < n; k++ {
+				copy(gateUpBatch[k*twoI:(k+1)*twoI],
+					gateUpBias[biasBase:biasBase+twoI])
 			}
-			// Tail tokens: run the old cascade on the subset, seeded with bias.
-			if tileEnd < n {
-				tailPairs := pairs[tileEnd:]
-				tailN := len(tailPairs)
-				tailBatch := gateUpBatch[tileEnd*twoI:]
-				for k := 0; k < tailN; k++ {
-					copy(tailBatch[k*twoI:(k+1)*twoI],
-						gateUpBias[biasBase:biasBase+twoI])
-				}
-				var ga [16][]float32
-				for s := 0; s < 16; s++ {
-					ga[s] = gateAlphas[s*tailN : (s+1)*tailN]
-				}
-				gwRow := func(d int) []float32 {
-					return gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
-				}
-				d := 0
-				for ; d+16 <= D; d += 16 {
-					for k, p := range tailPairs {
-						base := p.t * D
-						for s := 0; s < 16; s++ {
-							ga[s][k] = hidden[base+d+s]
-						}
-					}
-					var ws [16][]float32
+
+			// Batched gate-up: fuse up to sixteen d-iterations per gateUp
+			// block. Tail cascades down the fused-batch ladder.
+			var ga [16][]float32
+			for s := 0; s < 16; s++ {
+				ga[s] = gateAlphas[s*n : (s+1)*n]
+			}
+			gwRow := func(d int) []float32 {
+				return gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
+			}
+			d := 0
+			for ; d+16 <= D; d += 16 {
+				for k, p := range pairs {
+					base := p.t * D
 					for s := 0; s < 16; s++ {
-						ws[s] = gwRow(d + s)
+						ga[s][k] = hidden[base+d+s]
 					}
-					axpyBatch16(ga, ws, tailBatch, twoI)
 				}
-				for ; d+8 <= D; d += 8 {
-					for k, p := range tailPairs {
-						base := p.t * D
-						for s := 0; s < 8; s++ {
-							ga[s][k] = hidden[base+d+s]
-						}
+				var ws [16][]float32
+				for s := 0; s < 16; s++ {
+					ws[s] = gwRow(d + s)
+				}
+				axpyBatch16(ga, ws, gateUpBatch, twoI)
+			}
+			for ; d+8 <= D; d += 8 {
+				for k, p := range pairs {
+					base := p.t * D
+					for s := 0; s < 8; s++ {
+						ga[s][k] = hidden[base+d+s]
 					}
-					axpyBatch8(ga[0], ga[1], ga[2], ga[3], ga[4], ga[5], ga[6], ga[7],
-						gwRow(d), gwRow(d+1), gwRow(d+2), gwRow(d+3),
-						gwRow(d+4), gwRow(d+5), gwRow(d+6), gwRow(d+7),
-						tailBatch, twoI)
 				}
-				for ; d+4 <= D; d += 4 {
-					for k, p := range tailPairs {
-						base := p.t * D
-						for s := 0; s < 4; s++ {
-							ga[s][k] = hidden[base+d+s]
-						}
+				axpyBatch8(ga[0], ga[1], ga[2], ga[3], ga[4], ga[5], ga[6], ga[7],
+					gwRow(d), gwRow(d+1), gwRow(d+2), gwRow(d+3),
+					gwRow(d+4), gwRow(d+5), gwRow(d+6), gwRow(d+7),
+					gateUpBatch, twoI)
+			}
+			for ; d+4 <= D; d += 4 {
+				for k, p := range pairs {
+					base := p.t * D
+					for s := 0; s < 4; s++ {
+						ga[s][k] = hidden[base+d+s]
 					}
-					axpyBatch4(ga[0], ga[1], ga[2], ga[3],
-						gwRow(d), gwRow(d+1), gwRow(d+2), gwRow(d+3),
-						tailBatch, twoI)
 				}
-				for ; d+2 <= D; d += 2 {
-					for k, p := range tailPairs {
-						ga[0][k] = hidden[p.t*D+d]
-						ga[1][k] = hidden[p.t*D+d+1]
-					}
-					axpyBatch2(ga[0], ga[1], gwRow(d), gwRow(d+1), tailBatch, twoI)
+				axpyBatch4(ga[0], ga[1], ga[2], ga[3],
+					gwRow(d), gwRow(d+1), gwRow(d+2), gwRow(d+3),
+					gateUpBatch, twoI)
+			}
+			for ; d+2 <= D; d += 2 {
+				for k, p := range pairs {
+					ga[0][k] = hidden[p.t*D+d]
+					ga[1][k] = hidden[p.t*D+d+1]
 				}
-				for ; d < D; d++ {
-					for k, p := range tailPairs {
-						ga[0][k] = hidden[p.t*D+d]
-					}
-					axpyBatch(ga[0], gwRow(d), tailBatch, twoI)
+				axpyBatch2(ga[0], ga[1], gwRow(d), gwRow(d+1), gateUpBatch, twoI)
+			}
+			for ; d < D; d++ {
+				for k, p := range pairs {
+					ga[0][k] = hidden[p.t*D+d]
 				}
+				axpyBatch(ga[0], gwRow(d), gateUpBatch, twoI)
 			}
 
 			// Activation per batched token.
