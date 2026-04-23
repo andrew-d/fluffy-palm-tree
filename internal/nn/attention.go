@@ -1,6 +1,10 @@
 package nn
 
-import "math"
+import (
+	"math"
+	"runtime"
+	"sync"
+)
 
 // Linear applies y[t] = W @ x[t] + b per token, where W is stored row-major
 // with shape [out, in] (the HuggingFace nn.Linear.weight convention) and b has
@@ -21,7 +25,8 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 		panic("Linear: b length mismatch")
 	}
 	y := make([]float32, T*out)
-	for t := 0; t < T; t++ {
+
+	processRow := func(t int) {
 		xrow := x[t*in : (t+1)*in]
 		yrow := y[t*out : (t+1)*out]
 		for o := 0; o < out; o++ {
@@ -36,6 +41,43 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 			yrow[o] = s
 		}
 	}
+
+	// Each output row y[t*out:(t+1)*out] is written by only one worker, so no
+	// synchronization is needed. Linear is on the critical path for Q/K/V +
+	// output projections (x per layer) and the router/classifier head, all of
+	// which run serially with respect to MoEExperts, so we have full cores
+	// available here.
+	nWorkers := runtime.GOMAXPROCS(0)
+	if nWorkers > T {
+		nWorkers = T
+	}
+	if nWorkers <= 1 {
+		for t := 0; t < T; t++ {
+			processRow(t)
+		}
+		return y
+	}
+
+	var wg sync.WaitGroup
+	chunk := (T + nWorkers - 1) / nWorkers
+	for w := 0; w < nWorkers; w++ {
+		start := w * chunk
+		if start >= T {
+			break
+		}
+		end := start + chunk
+		if end > T {
+			end = T
+		}
+		wg.Add(1)
+		go func(start, end int) {
+			defer wg.Done()
+			for t := start; t < end; t++ {
+				processRow(t)
+			}
+		}(start, end)
+	}
+	wg.Wait()
 	return y
 }
 
