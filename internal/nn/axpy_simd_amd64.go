@@ -20,22 +20,10 @@ func axpy(alpha float32, x, y []float32) {
 	n := len(x)
 	a16 := archsimd.BroadcastFloat32x16(alpha)
 	i := 0
-	// Two independent 16-wide FMA chains per iteration: 32 fp32s of work
-	// with two loads, two FMAs, two stores — breaks the per-iteration
-	// store→load dep the single-chain body leaves on the critical path.
-	for ; i+32 <= n; i += 32 {
-		xv0 := archsimd.LoadFloat32x16Slice(x[i:])
-		yv0 := archsimd.LoadFloat32x16Slice(y[i:])
-		xv1 := archsimd.LoadFloat32x16Slice(x[i+16:])
-		yv1 := archsimd.LoadFloat32x16Slice(y[i+16:])
-		a16.MulAdd(xv0, yv0).StoreSlice(y[i:])
-		a16.MulAdd(xv1, yv1).StoreSlice(y[i+16:])
-	}
-	if i+16 <= n {
+	for ; i+16 <= n; i += 16 {
 		xv := archsimd.LoadFloat32x16Slice(x[i:])
 		yv := archsimd.LoadFloat32x16Slice(y[i:])
 		a16.MulAdd(xv, yv).StoreSlice(y[i:])
-		i += 16
 	}
 	if i+8 <= n {
 		a8 := archsimd.BroadcastFloat32x8(alpha)
