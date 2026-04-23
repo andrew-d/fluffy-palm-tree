@@ -143,6 +143,12 @@ def main() -> None:
     _save_np("attention_mask_bias", mask)
     manifest["tensors"].append({"name": "attention_mask_bias", "shape": [T, T], "path": "attention_mask_bias.f32.bin"})
 
+    # Dump raw score.bias weight (bf16 -> f32) for cross-checking the
+    # SafeTensors loader's BF16 decoding. We read the tensor directly off the
+    # model so the comparison is against the canonical bf16->f32 expansion.
+    score_bias = model.score.bias.detach().to(torch.bfloat16).to(torch.float32).cpu().numpy()
+    manifest["tensors"].append(_save_np("score_bias", score_bias))
+
     with open(OUT_DIR / "fixtures.json", "w") as fh:
         json.dump(manifest, fh, indent=2)
 

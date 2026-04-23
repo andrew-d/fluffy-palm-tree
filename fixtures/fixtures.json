@@ -553,6 +553,13 @@
         19
       ],
       "path": "attention_mask_bias.f32.bin"
+    },
+    {
+      "name": "score_bias",
+      "shape": [
+        33
+      ],
+      "path": "score_bias.f32.bin"
     }
   ],
   "pred_label_ids": [
