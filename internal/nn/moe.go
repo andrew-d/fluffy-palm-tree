@@ -6,10 +6,6 @@ import (
 	"sync"
 )
 
-// moeShardPool caches per-worker accumulator shards between MoEExperts
-// calls so we don't heap-allocate 8×T×D floats on every layer.
-var moeShardPool sync.Pool
-
 // TopKRouter picks the top-k experts for each token and returns normalized
 // scores (already divided by topK to exactly match the Python reference,
 // OpenAIPrivacyFilterTopKRouter.forward):
@@ -224,27 +220,10 @@ func MoEExperts(
 	// Each token's accum row can be written by up to topK different experts,
 	// each potentially on a different worker. Shard accum per worker and
 	// reduce at the end to avoid scatter-add contention.
-	shardSize := T * D
 	shards := make([][]float32, nWorkers)
 	for w := range shards {
-		if v := moeShardPool.Get(); v != nil {
-			buf := v.([]float32)
-			if cap(buf) >= shardSize {
-				buf = buf[:shardSize]
-				for i := range buf {
-					buf[i] = 0
-				}
-				shards[w] = buf
-				continue
-			}
-		}
-		shards[w] = make([]float32, shardSize)
+		shards[w] = make([]float32, T*D)
 	}
-	defer func() {
-		for _, buf := range shards {
-			moeShardPool.Put(buf)
-		}
-	}()
 
 	processExperts := func(workerID, startE, endE int) {
 		shard := shards[workerID]
