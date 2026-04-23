@@ -192,6 +192,74 @@ func axpyBatch8(
 	}
 }
 
+// axpyBatch16 fuses sixteen adjacent "d" iterations. One load + one store
+// per sixteen d-steps. 16 wRow registers + accumulator + broadcasts are
+// at the edge of AVX-512's 32-ZMM budget but still fit; if the compiler
+// spills, L1 latency is cheap compared to the store savings.
+func axpyBatch16(
+	a [16][]float32,
+	w [16][]float32,
+	y []float32, stride int,
+) {
+	n := len(a[0])
+	width := len(w[0])
+	i := 0
+	for ; i+16 <= width; i += 16 {
+		wv0 := archsimd.LoadFloat32x16Slice(w[0][i:])
+		wv1 := archsimd.LoadFloat32x16Slice(w[1][i:])
+		wv2 := archsimd.LoadFloat32x16Slice(w[2][i:])
+		wv3 := archsimd.LoadFloat32x16Slice(w[3][i:])
+		wv4 := archsimd.LoadFloat32x16Slice(w[4][i:])
+		wv5 := archsimd.LoadFloat32x16Slice(w[5][i:])
+		wv6 := archsimd.LoadFloat32x16Slice(w[6][i:])
+		wv7 := archsimd.LoadFloat32x16Slice(w[7][i:])
+		wv8 := archsimd.LoadFloat32x16Slice(w[8][i:])
+		wv9 := archsimd.LoadFloat32x16Slice(w[9][i:])
+		wv10 := archsimd.LoadFloat32x16Slice(w[10][i:])
+		wv11 := archsimd.LoadFloat32x16Slice(w[11][i:])
+		wv12 := archsimd.LoadFloat32x16Slice(w[12][i:])
+		wv13 := archsimd.LoadFloat32x16Slice(w[13][i:])
+		wv14 := archsimd.LoadFloat32x16Slice(w[14][i:])
+		wv15 := archsimd.LoadFloat32x16Slice(w[15][i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x16Slice(y[off:])
+			yv = archsimd.BroadcastFloat32x16(a[0][k]).MulAdd(wv0, yv)
+			yv = archsimd.BroadcastFloat32x16(a[1][k]).MulAdd(wv1, yv)
+			yv = archsimd.BroadcastFloat32x16(a[2][k]).MulAdd(wv2, yv)
+			yv = archsimd.BroadcastFloat32x16(a[3][k]).MulAdd(wv3, yv)
+			yv = archsimd.BroadcastFloat32x16(a[4][k]).MulAdd(wv4, yv)
+			yv = archsimd.BroadcastFloat32x16(a[5][k]).MulAdd(wv5, yv)
+			yv = archsimd.BroadcastFloat32x16(a[6][k]).MulAdd(wv6, yv)
+			yv = archsimd.BroadcastFloat32x16(a[7][k]).MulAdd(wv7, yv)
+			yv = archsimd.BroadcastFloat32x16(a[8][k]).MulAdd(wv8, yv)
+			yv = archsimd.BroadcastFloat32x16(a[9][k]).MulAdd(wv9, yv)
+			yv = archsimd.BroadcastFloat32x16(a[10][k]).MulAdd(wv10, yv)
+			yv = archsimd.BroadcastFloat32x16(a[11][k]).MulAdd(wv11, yv)
+			yv = archsimd.BroadcastFloat32x16(a[12][k]).MulAdd(wv12, yv)
+			yv = archsimd.BroadcastFloat32x16(a[13][k]).MulAdd(wv13, yv)
+			yv = archsimd.BroadcastFloat32x16(a[14][k]).MulAdd(wv14, yv)
+			yv = archsimd.BroadcastFloat32x16(a[15][k]).MulAdd(wv15, yv)
+			yv.StoreSlice(y[off:])
+		}
+	}
+	if i < width {
+		for j := i; j < width; j++ {
+			var v [16]float32
+			for s := 0; s < 16; s++ {
+				v[s] = w[s][j]
+			}
+			for k := 0; k < n; k++ {
+				var acc float32
+				for s := 0; s < 16; s++ {
+					acc += a[s][k] * v[s]
+				}
+				y[k*stride+j] += acc
+			}
+		}
+	}
+}
+
 // axpy computes y[i] += alpha * x[i] for i in [0, len(x)). Requires
 // len(x) == len(y). The body issues VFMADD231PS via simd/archsimd so a
 // single instruction processes 16 fp32s (AVX-512) or 8 fp32s (AVX2); the

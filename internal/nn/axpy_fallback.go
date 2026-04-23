@@ -99,6 +99,22 @@ func axpyBatch8(
 	}
 }
 
+// axpyBatch16: scalar fallback of the 16-d-fused batched axpy.
+func axpyBatch16(a [16][]float32, w [16][]float32, y []float32, stride int) {
+	n := len(a[0])
+	width := len(w[0])
+	for k := 0; k < n; k++ {
+		off := k * stride
+		for i := 0; i < width; i++ {
+			var acc float32
+			for s := 0; s < 16; s++ {
+				acc += a[s][k] * w[s][i]
+			}
+			y[off+i] += acc
+		}
+	}
+}
+
 // axpyBatch: scalar fallback of the SIMD batched axpy.
 func axpyBatch(alphas []float32, wRow []float32, y []float32, stride int) {
 	n := len(alphas)

@@ -256,15 +256,15 @@ func MoEExperts(
 			} else {
 				outBatch = outBatch[:need]
 			}
-			if cap(gateAlphas) < 8*n {
-				gateAlphas = make([]float32, 8*n)
+			if cap(gateAlphas) < 16*n {
+				gateAlphas = make([]float32, 16*n)
 			} else {
-				gateAlphas = gateAlphas[:8*n]
+				gateAlphas = gateAlphas[:16*n]
 			}
-			if cap(downAlphas) < 8*n {
-				downAlphas = make([]float32, 8*n)
+			if cap(downAlphas) < 16*n {
+				downAlphas = make([]float32, 16*n)
 			} else {
-				downAlphas = downAlphas[:8*n]
+				downAlphas = downAlphas[:16*n]
 			}
 
 			projBase := e * expertStride
@@ -278,34 +278,37 @@ func MoEExperts(
 					gateUpBias[biasBase:biasBase+twoI])
 			}
 
-			// Batched gate-up: fuse up to eight d-iterations per gateUp
-			// block (one load/store per 8 d-steps). Tail falls through
-			// axpyBatch4 → axpyBatch2 → axpyBatch.
-			ga0 := gateAlphas[:n]
-			ga1 := gateAlphas[n : 2*n]
-			ga2 := gateAlphas[2*n : 3*n]
-			ga3 := gateAlphas[3*n : 4*n]
-			ga4 := gateAlphas[4*n : 5*n]
-			ga5 := gateAlphas[5*n : 6*n]
-			ga6 := gateAlphas[6*n : 7*n]
-			ga7 := gateAlphas[7*n : 8*n]
+			// Batched gate-up: fuse up to sixteen d-iterations per gateUp
+			// block. Tail cascades down the fused-batch ladder.
+			var ga [16][]float32
+			for s := 0; s < 16; s++ {
+				ga[s] = gateAlphas[s*n : (s+1)*n]
+			}
 			gwRow := func(d int) []float32 {
 				return gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
 			}
 			d := 0
+			for ; d+16 <= D; d += 16 {
+				for k, p := range pairs {
+					base := p.t * D
+					for s := 0; s < 16; s++ {
+						ga[s][k] = hidden[base+d+s]
+					}
+				}
+				var ws [16][]float32
+				for s := 0; s < 16; s++ {
+					ws[s] = gwRow(d + s)
+				}
+				axpyBatch16(ga, ws, gateUpBatch, twoI)
+			}
 			for ; d+8 <= D; d += 8 {
 				for k, p := range pairs {
 					base := p.t * D
-					ga0[k] = hidden[base+d]
-					ga1[k] = hidden[base+d+1]
-					ga2[k] = hidden[base+d+2]
-					ga3[k] = hidden[base+d+3]
-					ga4[k] = hidden[base+d+4]
-					ga5[k] = hidden[base+d+5]
-					ga6[k] = hidden[base+d+6]
-					ga7[k] = hidden[base+d+7]
+					for s := 0; s < 8; s++ {
+						ga[s][k] = hidden[base+d+s]
+					}
 				}
-				axpyBatch8(ga0, ga1, ga2, ga3, ga4, ga5, ga6, ga7,
+				axpyBatch8(ga[0], ga[1], ga[2], ga[3], ga[4], ga[5], ga[6], ga[7],
 					gwRow(d), gwRow(d+1), gwRow(d+2), gwRow(d+3),
 					gwRow(d+4), gwRow(d+5), gwRow(d+6), gwRow(d+7),
 					gateUpBatch, twoI)
@@ -313,27 +316,26 @@ func MoEExperts(
 			for ; d+4 <= D; d += 4 {
 				for k, p := range pairs {
 					base := p.t * D
-					ga0[k] = hidden[base+d]
-					ga1[k] = hidden[base+d+1]
-					ga2[k] = hidden[base+d+2]
-					ga3[k] = hidden[base+d+3]
+					for s := 0; s < 4; s++ {
+						ga[s][k] = hidden[base+d+s]
+					}
 				}
-				axpyBatch4(ga0, ga1, ga2, ga3,
+				axpyBatch4(ga[0], ga[1], ga[2], ga[3],
 					gwRow(d), gwRow(d+1), gwRow(d+2), gwRow(d+3),
 					gateUpBatch, twoI)
 			}
 			for ; d+2 <= D; d += 2 {
 				for k, p := range pairs {
-					ga0[k] = hidden[p.t*D+d]
-					ga1[k] = hidden[p.t*D+d+1]
+					ga[0][k] = hidden[p.t*D+d]
+					ga[1][k] = hidden[p.t*D+d+1]
 				}
-				axpyBatch2(ga0, ga1, gwRow(d), gwRow(d+1), gateUpBatch, twoI)
+				axpyBatch2(ga[0], ga[1], gwRow(d), gwRow(d+1), gateUpBatch, twoI)
 			}
 			for ; d < D; d++ {
 				for k, p := range pairs {
-					ga0[k] = hidden[p.t*D+d]
+					ga[0][k] = hidden[p.t*D+d]
 				}
-				axpyBatch(ga0, gwRow(d), gateUpBatch, twoI)
+				axpyBatch(ga[0], gwRow(d), gateUpBatch, twoI)
 			}
 
 			// Activation per batched token.
@@ -350,31 +352,35 @@ func MoEExperts(
 			for k := 0; k < n; k++ {
 				copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
 			}
-			da0 := downAlphas[:n]
-			da1 := downAlphas[n : 2*n]
-			da2 := downAlphas[2*n : 3*n]
-			da3 := downAlphas[3*n : 4*n]
-			da4 := downAlphas[4*n : 5*n]
-			da5 := downAlphas[5*n : 6*n]
-			da6 := downAlphas[6*n : 7*n]
-			da7 := downAlphas[7*n : 8*n]
+			var da [16][]float32
+			for s := 0; s < 16; s++ {
+				da[s] = downAlphas[s*n : (s+1)*n]
+			}
 			dwRow := func(i int) []float32 {
 				return downProj[downBase+i*D : downBase+(i+1)*D]
 			}
 			i := 0
+			for ; i+16 <= I; i += 16 {
+				for k := 0; k < n; k++ {
+					base := k * I
+					for s := 0; s < 16; s++ {
+						da[s][k] = gatedBatch[base+i+s]
+					}
+				}
+				var ws [16][]float32
+				for s := 0; s < 16; s++ {
+					ws[s] = dwRow(i + s)
+				}
+				axpyBatch16(da, ws, outBatch, D)
+			}
 			for ; i+8 <= I; i += 8 {
 				for k := 0; k < n; k++ {
 					base := k * I
-					da0[k] = gatedBatch[base+i]
-					da1[k] = gatedBatch[base+i+1]
-					da2[k] = gatedBatch[base+i+2]
-					da3[k] = gatedBatch[base+i+3]
-					da4[k] = gatedBatch[base+i+4]
-					da5[k] = gatedBatch[base+i+5]
-					da6[k] = gatedBatch[base+i+6]
-					da7[k] = gatedBatch[base+i+7]
+					for s := 0; s < 8; s++ {
+						da[s][k] = gatedBatch[base+i+s]
+					}
 				}
-				axpyBatch8(da0, da1, da2, da3, da4, da5, da6, da7,
+				axpyBatch8(da[0], da[1], da[2], da[3], da[4], da[5], da[6], da[7],
 					dwRow(i), dwRow(i+1), dwRow(i+2), dwRow(i+3),
 					dwRow(i+4), dwRow(i+5), dwRow(i+6), dwRow(i+7),
 					outBatch, D)
@@ -382,27 +388,26 @@ func MoEExperts(
 			for ; i+4 <= I; i += 4 {
 				for k := 0; k < n; k++ {
 					base := k * I
-					da0[k] = gatedBatch[base+i]
-					da1[k] = gatedBatch[base+i+1]
-					da2[k] = gatedBatch[base+i+2]
-					da3[k] = gatedBatch[base+i+3]
+					for s := 0; s < 4; s++ {
+						da[s][k] = gatedBatch[base+i+s]
+					}
 				}
-				axpyBatch4(da0, da1, da2, da3,
+				axpyBatch4(da[0], da[1], da[2], da[3],
 					dwRow(i), dwRow(i+1), dwRow(i+2), dwRow(i+3),
 					outBatch, D)
 			}
 			for ; i+2 <= I; i += 2 {
 				for k := 0; k < n; k++ {
-					da0[k] = gatedBatch[k*I+i]
-					da1[k] = gatedBatch[k*I+i+1]
+					da[0][k] = gatedBatch[k*I+i]
+					da[1][k] = gatedBatch[k*I+i+1]
 				}
-				axpyBatch2(da0, da1, dwRow(i), dwRow(i+1), outBatch, D)
+				axpyBatch2(da[0], da[1], dwRow(i), dwRow(i+1), outBatch, D)
 			}
 			for ; i < I; i++ {
 				for k := 0; k < n; k++ {
-					da0[k] = gatedBatch[k*I+i]
+					da[0][k] = gatedBatch[k*I+i]
 				}
-				axpyBatch(da0, dwRow(i), outBatch, D)
+				axpyBatch(da[0], dwRow(i), outBatch, D)
 			}
 
 			// Scatter-add weighted outputs into this worker's shard.
