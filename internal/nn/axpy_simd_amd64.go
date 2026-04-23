@@ -37,6 +37,45 @@ func axpy(alpha float32, x, y []float32) {
 	}
 }
 
+// axpy2 fuses two axpys into a single store per block: for each 16-wide
+// chunk of y, loads y once, issues two FMAs (a0*x0 + a1*x1 + y), stores
+// y once. Used by MoE to roll two adjacent rows of gate-up / down-proj
+// into one pass so store traffic halves and the gateUp buffer stays
+// loaded in a register across a pair of input-dim iterations.
+//
+// Requires len(x0) == len(x1) == len(y).
+func axpy2(a0, a1 float32, x0, x1, y []float32) {
+	n := len(y)
+	if len(x0) != n || len(x1) != n {
+		panic("axpy2: length mismatch")
+	}
+	a0v16 := archsimd.BroadcastFloat32x16(a0)
+	a1v16 := archsimd.BroadcastFloat32x16(a1)
+	i := 0
+	for ; i+16 <= n; i += 16 {
+		yv := archsimd.LoadFloat32x16Slice(y[i:])
+		x0v := archsimd.LoadFloat32x16Slice(x0[i:])
+		x1v := archsimd.LoadFloat32x16Slice(x1[i:])
+		yv = a0v16.MulAdd(x0v, yv)
+		yv = a1v16.MulAdd(x1v, yv)
+		yv.StoreSlice(y[i:])
+	}
+	if i+8 <= n {
+		a0v8 := archsimd.BroadcastFloat32x8(a0)
+		a1v8 := archsimd.BroadcastFloat32x8(a1)
+		yv := archsimd.LoadFloat32x8Slice(y[i:])
+		x0v := archsimd.LoadFloat32x8Slice(x0[i:])
+		x1v := archsimd.LoadFloat32x8Slice(x1[i:])
+		yv = a0v8.MulAdd(x0v, yv)
+		yv = a1v8.MulAdd(x1v, yv)
+		yv.StoreSlice(y[i:])
+		i += 8
+	}
+	for ; i < n; i++ {
+		y[i] += a0*x0[i] + a1*x1[i]
+	}
+}
+
 // dot computes sum_i x[i] * w[i] using a packed 16-lane accumulator (with
 // an 8-lane step-down for sub-16 tails), then horizontally sums at the
 // end. len(x) must equal len(w). Used by Linear (Q/K/V + output + router +
