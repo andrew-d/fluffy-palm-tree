@@ -206,7 +206,7 @@ func MoEExperts(
 		}
 	}
 
-	nWorkers := 2 * runtime.GOMAXPROCS(0)
+	nWorkers := runtime.GOMAXPROCS(0)
 	if nWorkers > numExperts {
 		nWorkers = numExperts
 	}
