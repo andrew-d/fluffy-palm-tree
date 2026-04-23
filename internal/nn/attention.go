@@ -29,18 +29,9 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 	processRow := func(t int) {
 		xrow := x[t*in : (t+1)*in]
 		yrow := y[t*out : (t+1)*out]
-		o := 0
-		for ; o+2 <= out; o += 2 {
-			s0, s1 := dot2(xrow, W[o*in:(o+1)*in], W[(o+1)*in:(o+2)*in])
-			if b != nil {
-				s0 += b[o]
-				s1 += b[o+1]
-			}
-			yrow[o] = s0
-			yrow[o+1] = s1
-		}
-		for ; o < out; o++ {
-			s := dot(xrow, W[o*in:(o+1)*in])
+		for o := 0; o < out; o++ {
+			wrow := W[o*in : (o+1)*in]
+			s := dot(xrow, wrow)
 			if b != nil {
 				s += b[o]
 			}
