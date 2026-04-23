@@ -1,6 +1,10 @@
 package nn
 
-import "math"
+import (
+	"math"
+	"runtime"
+	"sync"
+)
 
 // TopKRouter picks the top-k experts for each token and returns normalized
 // scores (already divided by topK to exactly match the Python reference,
@@ -161,16 +165,24 @@ func MoEExperts(
 
 	accum := make([]float32, T*D)
 
-	// Scratch buffers reused across (token, k_pos) pairs.
-	gateUp := make([]float32, 2*I)
-	gated := make([]float32, I)
-
 	twoI := 2 * I
 	expertStride := D * twoI
 	downStride := I * D
 
-	for t := 0; t < T; t++ {
+	// Parallelize across tokens. Each token's accumulator row accum[t*D:(t+1)*D]
+	// is written by only one worker, so no locking is needed. The gateUp/gated
+	// scratch buffers are per-worker.
+	nWorkers := runtime.GOMAXPROCS(0)
+	if nWorkers > T {
+		nWorkers = T
+	}
+	if nWorkers < 1 {
+		nWorkers = 1
+	}
+
+	processToken := func(t int, gateUp, gated []float32) {
 		state := hidden[t*D : (t+1)*D]
+		accumRow := accum[t*D : (t+1)*D]
 		for kPos := 0; kPos < topK; kPos++ {
 			e := routerIndices[t*topK+kPos]
 			if e < 0 || e >= numExperts {
@@ -183,9 +195,7 @@ func MoEExperts(
 			// gate_up = state @ gate_up_proj[e] + gate_up_bias[e]   # [2*I]
 			projBase := e * expertStride
 			biasBase := e * twoI
-			// Initialize with bias.
 			copy(gateUp, gateUpBias[biasBase:biasBase+twoI])
-			// Accumulate: gateUp[j] += sum_d state[d] * gateUpProj[e, d, j]
 			for d := 0; d < D; d++ {
 				s := state[d]
 				if s == 0 {
@@ -199,10 +209,6 @@ func MoEExperts(
 			}
 
 			// gate = gateUp[:I], up = gateUp[I:]  (concatenated layout)
-			// gate = min(gate, limit)
-			// up   = clamp(up, -limit, +limit)
-			// glu  = gate * sigmoid(gate * alpha)
-			// gated = (up + 1) * glu
 			for i := 0; i < I; i++ {
 				g := gateUp[i]
 				u := gateUp[I+i]
@@ -214,20 +220,14 @@ func MoEExperts(
 				} else if u < -limit {
 					u = -limit
 				}
-				// sigmoid(g * alpha) = 1 / (1 + exp(-g*alpha))
 				sig := float32(1.0 / (1.0 + math.Exp(-float64(g)*float64(alpha))))
 				glu := g * sig
 				gated[i] = (u + 1) * glu
 			}
 
 			// out = gated @ downProj[e] + downBias[e]  # [D]
-			// Weighted by `weight` and added into accum[t].
 			downBase := e * downStride
 			dbBase := e * D
-			// out[d] = sum_i gated[i] * downProj[e, i, d] + downBias[e, d]
-			// accum[t, d] += weight * out[d]
-			// Precompute bias-weighted addend for this kPos once.
-			accumRow := accum[t*D : (t+1)*D]
 			for i := 0; i < I; i++ {
 				gi := gated[i]
 				if gi == 0 {
@@ -240,11 +240,41 @@ func MoEExperts(
 					accumRow[d] += w * row[d]
 				}
 			}
-			// Add the weighted bias contribution.
 			for d := 0; d < D; d++ {
 				accumRow[d] += weight * downBias[dbBase+d]
 			}
 		}
+	}
+
+	if nWorkers == 1 {
+		gateUp := make([]float32, twoI)
+		gated := make([]float32, I)
+		for t := 0; t < T; t++ {
+			processToken(t, gateUp, gated)
+		}
+	} else {
+		var wg sync.WaitGroup
+		chunk := (T + nWorkers - 1) / nWorkers
+		for w := 0; w < nWorkers; w++ {
+			start := w * chunk
+			if start >= T {
+				break
+			}
+			end := start + chunk
+			if end > T {
+				end = T
+			}
+			wg.Add(1)
+			go func(start, end int) {
+				defer wg.Done()
+				gateUp := make([]float32, twoI)
+				gated := make([]float32, I)
+				for t := start; t < end; t++ {
+					processToken(t, gateUp, gated)
+				}
+			}(start, end)
+		}
+		wg.Wait()
 	}
 
 	// Post-scale by topK, matching OpenAIPrivacyFilterMLP.forward:
