@@ -208,33 +208,26 @@ func MoEExperts(
 		shards[w] = make([]float32, T*D)
 	}
 
+	// Tile tokens per expert so the batched gateUp scratch stays in L1.
+	// gateUp per token is 2I*4 = 5 KB on the current model; a tile of 6
+	// is ~30 KB of gateUp which fits in a 32 KB L1 cache; gated (2.5 KB)
+	// and out (2.5 KB) for a 6-tile add another 30 KB that share L1
+	// across phases. W rows are reloaded once per tile, so with N=10
+	// per expert we pay ~2× reads vs a single big batch, still ~5× less
+	// than the per-token baseline. Empirically the L1 stability wins.
+	const tileSize = 6
+
 	processExperts := func(workerID, startE, endE int) {
 		shard := shards[workerID]
-		// Per-worker batch scratch, grown on demand to the largest N we see.
-		var gateUpBatch, gatedBatch, outBatch []float32
+		gateUpBatch := make([]float32, tileSize*twoI)
+		gatedBatch := make([]float32, tileSize*I)
+		outBatch := make([]float32, tileSize*D)
+
 		for e := startE; e < endE; e++ {
 			pairs := perExpert[e]
 			n := len(pairs)
 			if n == 0 {
 				continue
-			}
-			need := n * twoI
-			if cap(gateUpBatch) < need {
-				gateUpBatch = make([]float32, need)
-			} else {
-				gateUpBatch = gateUpBatch[:need]
-			}
-			need = n * I
-			if cap(gatedBatch) < need {
-				gatedBatch = make([]float32, need)
-			} else {
-				gatedBatch = gatedBatch[:need]
-			}
-			need = n * D
-			if cap(outBatch) < need {
-				outBatch = make([]float32, need)
-			} else {
-				outBatch = outBatch[:need]
 			}
 
 			projBase := e * expertStride
@@ -242,49 +235,56 @@ func MoEExperts(
 			downBase := e * downStride
 			dbBase := e * D
 
-			// Seed each row of gateUpBatch with the expert's bias.
-			for k := 0; k < n; k++ {
-				copy(gateUpBatch[k*twoI:(k+1)*twoI],
-					gateUpBias[biasBase:biasBase+twoI])
-			}
-
-			// Batched gate-up matmul. Inner loop order is (d outer, k inner)
-			// so each 5 KB row of gateUpProj is loaded ONCE from DRAM and
-			// reused across all n assigned tokens.
-			for d := 0; d < D; d++ {
-				wRow := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
-				for k, p := range pairs {
-					s := hidden[p.t*D+d]
-					axpy(s, wRow, gateUpBatch[k*twoI:(k+1)*twoI])
+			for tileStart := 0; tileStart < n; tileStart += tileSize {
+				tileEnd := tileStart + tileSize
+				if tileEnd > n {
+					tileEnd = n
 				}
-			}
+				tile := pairs[tileStart:tileEnd]
+				m := len(tile)
 
-			// Activation per batched token.
-			for k := 0; k < n; k++ {
-				moeActivation(
-					gateUpBatch[k*twoI:(k+1)*twoI],
-					gatedBatch[k*I:(k+1)*I],
-					I, limit, alpha,
-				)
-			}
-
-			// Seed outBatch with downBias, then batched down matmul with
-			// the same d-outer/k-inner reuse pattern.
-			for k := 0; k < n; k++ {
-				copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
-			}
-			for i := 0; i < I; i++ {
-				wRow := downProj[downBase+i*D : downBase+(i+1)*D]
-				for k := range pairs {
-					s := gatedBatch[k*I+i]
-					axpy(s, wRow, outBatch[k*D:(k+1)*D])
+				// Seed this tile's gateUp rows with bias.
+				for k := 0; k < m; k++ {
+					copy(gateUpBatch[k*twoI:(k+1)*twoI],
+						gateUpBias[biasBase:biasBase+twoI])
 				}
-			}
 
-			// Scatter-add weighted outputs into this worker's shard.
-			for k, p := range pairs {
-				axpy(p.weight, outBatch[k*D:(k+1)*D],
-					shard[p.t*D:(p.t+1)*D])
+				// Gate-up matmul: d outer / k inner so each wRow is loaded
+				// once from L2/L3 per tile and reused across the m tokens.
+				for d := 0; d < D; d++ {
+					wRow := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
+					for k, p := range tile {
+						s := hidden[p.t*D+d]
+						axpy(s, wRow, gateUpBatch[k*twoI:(k+1)*twoI])
+					}
+				}
+
+				// Activation per tile token.
+				for k := 0; k < m; k++ {
+					moeActivation(
+						gateUpBatch[k*twoI:(k+1)*twoI],
+						gatedBatch[k*I:(k+1)*I],
+						I, limit, alpha,
+					)
+				}
+
+				// Down matmul: seed with downBias, same d-outer/k-inner.
+				for k := 0; k < m; k++ {
+					copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
+				}
+				for i := 0; i < I; i++ {
+					wRow := downProj[downBase+i*D : downBase+(i+1)*D]
+					for k := range tile {
+						s := gatedBatch[k*I+i]
+						axpy(s, wRow, outBatch[k*D:(k+1)*D])
+					}
+				}
+
+				// Scatter-add weighted outputs into this worker's shard.
+				for k, p := range tile {
+					axpy(p.weight, outBatch[k*D:(k+1)*D],
+						shard[p.t*D:(p.t+1)*D])
+				}
 			}
 		}
 	}
