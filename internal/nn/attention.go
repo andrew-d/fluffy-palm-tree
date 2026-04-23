@@ -26,52 +26,52 @@ func Linear(x, W, b []float32, T, in, out int) []float32 {
 	}
 	y := make([]float32, T*out)
 
-	processRow := func(t int) {
-		xrow := x[t*in : (t+1)*in]
-		yrow := y[t*out : (t+1)*out]
-		for o := 0; o < out; o++ {
+	// Each output column y[:, o] is written by only one worker, so no
+	// synchronization is needed. Parallelize across out so each worker
+	// streams out/nWorkers weight rows (~2.3 MB / 8 ≈ 290 KB for the Q
+	// projection) instead of the full W. The shared x (780 KB for
+	// T=306, in=640) stays hot in L3 across workers.
+	nWorkers := runtime.GOMAXPROCS(0)
+	if nWorkers > out {
+		nWorkers = out
+	}
+
+	processChunk := func(oStart, oEnd int) {
+		// o outer, t inner: wrow is loaded once per o and reused across
+		// all T tokens. Beats the previous t-outer/o-inner order, which
+		// streamed the full W matrix once per token.
+		for o := oStart; o < oEnd; o++ {
 			wrow := W[o*in : (o+1)*in]
-			s := dot(xrow, wrow)
+			var bias float32
 			if b != nil {
-				s += b[o]
+				bias = b[o]
 			}
-			yrow[o] = s
+			for t := 0; t < T; t++ {
+				y[t*out+o] = dot(x[t*in:(t+1)*in], wrow) + bias
+			}
 		}
 	}
 
-	// Each output row y[t*out:(t+1)*out] is written by only one worker, so no
-	// synchronization is needed. Linear is on the critical path for Q/K/V +
-	// output projections (x per layer) and the router/classifier head, all of
-	// which run serially with respect to MoEExperts, so we have full cores
-	// available here.
-	nWorkers := runtime.GOMAXPROCS(0)
-	if nWorkers > T {
-		nWorkers = T
-	}
 	if nWorkers <= 1 {
-		for t := 0; t < T; t++ {
-			processRow(t)
-		}
+		processChunk(0, out)
 		return y
 	}
 
 	var wg sync.WaitGroup
-	chunk := (T + nWorkers - 1) / nWorkers
+	chunk := (out + nWorkers - 1) / nWorkers
 	for w := 0; w < nWorkers; w++ {
 		start := w * chunk
-		if start >= T {
+		if start >= out {
 			break
 		}
 		end := start + chunk
-		if end > T {
-			end = T
+		if end > out {
+			end = out
 		}
 		wg.Add(1)
 		go func(start, end int) {
 			defer wg.Done()
-			for t := start; t < end; t++ {
-				processRow(t)
-			}
+			processChunk(start, end)
 		}(start, end)
 	}
 	wg.Wait()
