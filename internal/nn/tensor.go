@@ -47,6 +47,19 @@ func RMSNorm(x []float32, weight []float32, T, D int, eps float32) []float32 {
 	return out
 }
 
+// Add returns a freshly allocated element-wise sum of a and b. Both slices
+// must have the same length. Panics on length mismatch.
+func Add(a, b []float32) []float32 {
+	if len(a) != len(b) {
+		panic("Add: length mismatch")
+	}
+	out := make([]float32, len(a))
+	for i := range a {
+		out[i] = a[i] + b[i]
+	}
+	return out
+}
+
 // EmbeddingLookup gathers rows of an embedding table by id.
 //
 //	embed: [V, D] flat row-major
