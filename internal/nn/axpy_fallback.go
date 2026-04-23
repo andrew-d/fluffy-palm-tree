@@ -44,6 +44,20 @@ func moeActivation(gateUp, gated []float32, I int, limit, alpha float32) {
 	}
 }
 
+// axpyBatch2: scalar fallback of the pair-d-fused batched axpy.
+func axpyBatch2(alphas0, alphas1 []float32, wRow0, wRow1 []float32, y []float32, stride int) {
+	n := len(alphas0)
+	w := len(wRow0)
+	for k := 0; k < n; k++ {
+		a0 := alphas0[k]
+		a1 := alphas1[k]
+		off := k * stride
+		for i := 0; i < w; i++ {
+			y[off+i] += a0*wRow0[i] + a1*wRow1[i]
+		}
+	}
+}
+
 // axpyBatch: scalar fallback of the SIMD batched axpy.
 func axpyBatch(alphas []float32, wRow []float32, y []float32, stride int) {
 	n := len(alphas)

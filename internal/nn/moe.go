@@ -256,15 +256,15 @@ func MoEExperts(
 			} else {
 				outBatch = outBatch[:need]
 			}
-			if cap(gateAlphas) < n {
-				gateAlphas = make([]float32, n)
+			if cap(gateAlphas) < 2*n {
+				gateAlphas = make([]float32, 2*n)
 			} else {
-				gateAlphas = gateAlphas[:n]
+				gateAlphas = gateAlphas[:2*n]
 			}
-			if cap(downAlphas) < n {
-				downAlphas = make([]float32, n)
+			if cap(downAlphas) < 2*n {
+				downAlphas = make([]float32, 2*n)
 			} else {
-				downAlphas = downAlphas[:n]
+				downAlphas = downAlphas[:2*n]
 			}
 
 			projBase := e * expertStride
@@ -278,15 +278,27 @@ func MoEExperts(
 					gateUpBias[biasBase:biasBase+twoI])
 			}
 
-			// Batched gate-up: each d loads wRow once and fans out over the
-			// N assigned tokens via axpyBatch (saves N function calls per d
-			// and hoists the wRow load to the outer iteration).
-			for d := 0; d < D; d++ {
+			// Batched gate-up: pair up d-iterations via axpyBatch2 so each
+			// gateUp block is loaded/stored once per *two* input dims.
+			// Halves store traffic vs the single-d axpyBatch.
+			alphas0 := gateAlphas[:n]
+			alphas1 := gateAlphas[n : 2*n]
+			d := 0
+			for ; d+2 <= D; d += 2 {
+				wRow0 := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
+				wRow1 := gateUpProj[projBase+(d+1)*twoI : projBase+(d+2)*twoI]
+				for k, p := range pairs {
+					alphas0[k] = hidden[p.t*D+d]
+					alphas1[k] = hidden[p.t*D+d+1]
+				}
+				axpyBatch2(alphas0, alphas1, wRow0, wRow1, gateUpBatch, twoI)
+			}
+			for ; d < D; d++ {
 				wRow := gateUpProj[projBase+d*twoI : projBase+(d+1)*twoI]
 				for k, p := range pairs {
-					gateAlphas[k] = hidden[p.t*D+d]
+					alphas0[k] = hidden[p.t*D+d]
 				}
-				axpyBatch(gateAlphas, wRow, gateUpBatch, twoI)
+				axpyBatch(alphas0, wRow, gateUpBatch, twoI)
 			}
 
 			// Activation per batched token.
@@ -298,16 +310,29 @@ func MoEExperts(
 				)
 			}
 
-			// Seed outBatch with downBias, then batched down matmul.
+			// Seed outBatch with downBias, then batched down matmul with
+			// the same pair-d fusion.
 			for k := 0; k < n; k++ {
 				copy(outBatch[k*D:(k+1)*D], downBias[dbBase:dbBase+D])
 			}
-			for i := 0; i < I; i++ {
+			downA0 := downAlphas[:n]
+			downA1 := downAlphas[n : 2*n]
+			i := 0
+			for ; i+2 <= I; i += 2 {
+				wRow0 := downProj[downBase+i*D : downBase+(i+1)*D]
+				wRow1 := downProj[downBase+(i+1)*D : downBase+(i+2)*D]
+				for k := 0; k < n; k++ {
+					downA0[k] = gatedBatch[k*I+i]
+					downA1[k] = gatedBatch[k*I+i+1]
+				}
+				axpyBatch2(downA0, downA1, wRow0, wRow1, outBatch, D)
+			}
+			for ; i < I; i++ {
 				wRow := downProj[downBase+i*D : downBase+(i+1)*D]
 				for k := 0; k < n; k++ {
-					downAlphas[k] = gatedBatch[k*I+i]
+					downA0[k] = gatedBatch[k*I+i]
 				}
-				axpyBatch(downAlphas, wRow, outBatch, D)
+				axpyBatch(downA0, wRow, outBatch, D)
 			}
 
 			// Scatter-add weighted outputs into this worker's shard.

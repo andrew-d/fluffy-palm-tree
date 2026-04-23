@@ -47,6 +47,53 @@ func axpyBatch(alphas []float32, wRow []float32, y []float32, stride int) {
 	}
 }
 
+// axpyBatch2 fuses two adjacent "d" iterations of the MoE gate-up / down
+// matmul so each N-wide gateUp/out block incurs ONE load + ONE store per
+// pair of d steps instead of two. Saves ~50% of the store traffic on the
+// hot kernel.
+//
+// y[k][i:+16] += alphas0[k]*wRow0[i:+16] + alphas1[k]*wRow1[i:+16]
+// for k in [0, len(alphas0)), i striding 16.
+func axpyBatch2(alphas0, alphas1 []float32, wRow0, wRow1 []float32, y []float32, stride int) {
+	n := len(alphas0)
+	w := len(wRow0)
+	i := 0
+	for ; i+16 <= w; i += 16 {
+		wv0 := archsimd.LoadFloat32x16Slice(wRow0[i:])
+		wv1 := archsimd.LoadFloat32x16Slice(wRow1[i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x16Slice(y[off:])
+			a0 := archsimd.BroadcastFloat32x16(alphas0[k])
+			a1 := archsimd.BroadcastFloat32x16(alphas1[k])
+			yv = a0.MulAdd(wv0, yv)
+			yv = a1.MulAdd(wv1, yv)
+			yv.StoreSlice(y[off:])
+		}
+	}
+	if i+8 <= w {
+		wv0 := archsimd.LoadFloat32x8Slice(wRow0[i:])
+		wv1 := archsimd.LoadFloat32x8Slice(wRow1[i:])
+		for k := 0; k < n; k++ {
+			off := k*stride + i
+			yv := archsimd.LoadFloat32x8Slice(y[off:])
+			a0 := archsimd.BroadcastFloat32x8(alphas0[k])
+			a1 := archsimd.BroadcastFloat32x8(alphas1[k])
+			yv = a0.MulAdd(wv0, yv)
+			yv = a1.MulAdd(wv1, yv)
+			yv.StoreSlice(y[off:])
+		}
+		i += 8
+	}
+	for ; i < w; i++ {
+		w0i := wRow0[i]
+		w1i := wRow1[i]
+		for k := 0; k < n; k++ {
+			y[k*stride+i] += alphas0[k]*w0i + alphas1[k]*w1i
+		}
+	}
+}
+
 // axpy computes y[i] += alpha * x[i] for i in [0, len(x)). Requires
 // len(x) == len(y). The body issues VFMADD231PS via simd/archsimd so a
 // single instruction processes 16 fp32s (AVX-512) or 8 fp32s (AVX2); the
