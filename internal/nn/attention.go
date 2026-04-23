@@ -233,26 +233,8 @@ func GQAAttentionWithSinks(
 			}
 
 			// Raw logits s[j] = <q_row, k[j, kvIdx, :]>, only for valid j.
-			// Batch 8 consecutive j's so the shared qRow is loaded once
-			// across 8 dot products (same trick as Linear's dotBatch8,
-			// with qRow in the w slot).
 			maxLogit := float32(math.Inf(-1))
-			j := jLo
-			for ; j+8 <= jHi; j += 8 {
-				var kRows [8][]float32
-				for s := 0; s < 8; s++ {
-					kOff := ((j + s)*numKV + kvIdx) * headDim
-					kRows[s] = k[kOff : kOff+headDim]
-				}
-				r := dotBatch8(qRow, kRows)
-				for s := 0; s < 8; s++ {
-					scores[j+s] = r[s]
-					if r[s] > maxLogit {
-						maxLogit = r[s]
-					}
-				}
-			}
-			for ; j < jHi; j++ {
+			for j := jLo; j < jHi; j++ {
 				kOff := (j*numKV + kvIdx) * headDim
 				s := dot(qRow, k[kOff:kOff+headDim])
 				scores[j] = s
