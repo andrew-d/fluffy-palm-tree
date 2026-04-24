@@ -12,6 +12,8 @@
   --c-private_address: #ffadad;
   --c-private_date:    #bdb2ff;
   --c-private_url:     #fdffb6;
+  --c-secret:          #ffc6ff;
+  --c-account_number:  #b5ead7;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -102,6 +104,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .ent[data-type="private_address"] { background: var(--c-private_address); }
 .ent[data-type="private_date"]    { background: var(--c-private_date); }
 .ent[data-type="private_url"]     { background: var(--c-private_url); }
+.ent[data-type="secret"]          { background: var(--c-secret); }
+.ent[data-type="account_number"]  { background: var(--c-account_number); }
 .ent { color: #111; }
 
 .ent:hover::after {

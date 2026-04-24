@@ -7,6 +7,8 @@ const ENTITY_TYPES = [
   "private_address",
   "private_date",
   "private_url",
+  "secret",
+  "account_number",
 ];
 
 const POLL_MS = 500;
