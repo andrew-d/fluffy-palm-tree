@@ -24,8 +24,8 @@ func getBenchModel(tb testing.TB) *privacyfilter.Model {
 	return benchModel
 }
 
-const benchParagraph = "My name is Harry Potter and my email is harry.potter@hogwarts.edu. " +
-	"Please contact me at 555-123-4567 or at my home, 4 Privet Drive, Little Whinging. " +
+const benchParagraph = "My name is Sherlock Holmes and my email is sherlock.holmes@scotlandyard.uk. " +
+	"Please contact me at 555-123-4567 or at my home, 221B Baker Street, London. " +
 	"My account number is 000123456789 and my password is hunter2. "
 
 func benchInput(repeat int) string {

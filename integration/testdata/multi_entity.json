@@ -1,26 +1,33 @@
 {
-  "text": "Harry Potter (harry.potter@hogwarts.edu, 555-123-4567) lives at 4 Privet Drive.",
+  "text": "Sherlock Holmes (sherlock.holmes@scotlandyard.uk, 555-123-4567) lives at 221B Baker Street.",
   "entities": [
     {
+      "entity_group": "private_person",
+      "word": "Sherlock Holmes",
+      "start": 0,
+      "end": 15,
+      "score": 0.9988517761230469
+    },
+    {
       "entity_group": "private_email",
-      "word": "harry.potter@hogwarts.edu",
-      "start": 14,
-      "end": 39,
-      "score": 0.9999755952093337
+      "word": "sherlock.holmes@scotlandyard.uk",
+      "start": 17,
+      "end": 48,
+      "score": 0.9999858249317516
     },
     {
       "entity_group": "private_phone",
       "word": "555-123-4567",
-      "start": 41,
-      "end": 53,
-      "score": 0.9999765157699585
+      "start": 50,
+      "end": 62,
+      "score": 0.999804804722468
     },
     {
       "entity_group": "private_address",
-      "word": "4 Privet Drive",
-      "start": 64,
-      "end": 78,
-      "score": 0.9983084350824356
+      "word": "221B Baker Street",
+      "start": 73,
+      "end": 90,
+      "score": 0.9936181604862213
     }
   ]
 }

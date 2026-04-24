@@ -1,12 +1,12 @@
 {
-  "text": "My name is Harry Potter and I live in the countryside.",
+  "text": "My name is Sherlock Holmes and I live in the countryside.",
   "entities": [
     {
       "entity_group": "private_person",
-      "word": " Harry Potter",
+      "word": " Sherlock Holmes",
       "start": 10,
-      "end": 23,
-      "score": 0.9999980926513672
+      "end": 26,
+      "score": 0.7757977545261383
     }
   ]
 }

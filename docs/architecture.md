@@ -139,10 +139,10 @@ For token i and token j, attention is allowed iff `|i-j| <= sliding_window` wher
 ## Aggregation ("simple" BIOES-aware)
 
 The transformers.js model card example shows:
-- Harry Potter example → entities `private_person: " Harry Potter"` and `private_email: " harry.potter@hogwarts.edu"`.
+- Sherlock Holmes example → entities `private_person: " Sherlock Holmes"` and `private_email: " sherlock.holmes@scotlandyard.uk"`.
 - Per-token labels we observed:
-  - ` Harry` → B-private_person, ` Potter` → E-private_person
-  - ` har` → B-private_email, `ry`…`warts` → I-private_email, `.edu` → E-private_email
+  - ` Sherlock` → B-private_person, ` Holmes` → E-private_person
+  - ` sher` → B-private_email, `lock`…`yard` → I-private_email, `.uk` → E-private_email
 
 The transformers' `simple` strategy only merges B and I of the same entity type. For this model with BIOES, we need to merge B+I*+E into one entity (and S alone as a separate entity). Aggregation steps:
 

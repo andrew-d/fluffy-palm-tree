@@ -35,8 +35,8 @@ REPO = SCRIPT_DIR.parent
 MODEL_DIR = REPO / "model"
 
 BENCH_PARAGRAPH = (
-    "My name is Harry Potter and my email is harry.potter@hogwarts.edu. "
-    "Please contact me at 555-123-4567 or at my home, 4 Privet Drive, Little Whinging. "
+    "My name is Sherlock Holmes and my email is sherlock.holmes@scotlandyard.uk. "
+    "Please contact me at 555-123-4567 or at my home, 221B Baker Street, London. "
     "My account number is 000123456789 and my password is hunter2. "
 )
 

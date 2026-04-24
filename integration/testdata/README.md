@@ -14,9 +14,9 @@ JSON schema:
   "entities": [
     {
       "entity_group": "private_person",
-      "word":         " Harry Potter",
+      "word":         " Sherlock Holmes",
       "start":        10,
-      "end":          23,
+      "end":          26,
       "score":        0.99998
     }
   ]

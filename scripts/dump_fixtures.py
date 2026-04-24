@@ -3,7 +3,7 @@
 Captures: tokenization, embedding, RoPE cos/sin, per-layer attention outputs,
 per-layer MLP outputs, final hidden states and logits, and routing info.
 
-We run the short Harry Potter text only (seq len = 19) to keep fixtures small.
+We run the short Sherlock Holmes text only to keep fixtures small.
 """
 import json
 import os
@@ -19,7 +19,7 @@ MODEL_DIR = Path(__file__).resolve().parent.parent / "model"
 OUT_DIR = Path(__file__).resolve().parent.parent / "fixtures"
 OUT_DIR.mkdir(exist_ok=True)
 
-TEXT = "My name is Harry Potter and my email is harry.potter@hogwarts.edu."
+TEXT = "My name is Sherlock Holmes and my email is sherlock.holmes@scotlandyard.uk."
 
 
 def _save_np(name: str, arr: np.ndarray) -> dict:

@@ -1,12 +1,12 @@
 {
-  "text": "Please contact harry.potter@hogwarts.edu for the details.",
+  "text": "Please contact sherlock.holmes@scotlandyard.uk for the details.",
   "entities": [
     {
       "entity_group": "private_email",
-      "word": " harry.potter@hogwarts.edu",
+      "word": " sherlock.holmes@scotlandyard.uk",
       "start": 14,
-      "end": 40,
-      "score": 0.9999940925174289
+      "end": 46,
+      "score": 0.9999998688697815
     }
   ]
 }

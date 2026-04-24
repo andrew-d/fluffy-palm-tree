@@ -26,22 +26,22 @@ func loadSharedModel(t *testing.T) *privacyfilter.Model {
 	return sharedModel
 }
 
-// TestHarryPotterEndToEnd is the top-level integration test: it loads the
-// model and runs it on the example from the model card. The expected output
-// comes from the transformers Python reference implementation (with BIOES
+// TestSherlockHolmesEndToEnd is the top-level integration test: it loads the
+// model and runs it on the canonical demo sentence. The expected output comes
+// from the transformers Python reference implementation (with BIOES
 // aggregation) captured in fixtures/reference_outputs.json.
-func TestHarryPotterEndToEnd(t *testing.T) {
+func TestSherlockHolmesEndToEnd(t *testing.T) {
 	model := loadSharedModel(t)
 
-	text := "My name is Harry Potter and my email is harry.potter@hogwarts.edu."
+	text := "My name is Sherlock Holmes and my email is sherlock.holmes@scotlandyard.uk."
 	entities, err := model.Classify(text)
 	if err != nil {
 		t.Fatalf("Classify: %v", err)
 	}
 
 	want := []privacyfilter.Entity{
-		{EntityGroup: "private_person", Word: " Harry Potter", Start: 10, End: 23},
-		{EntityGroup: "private_email", Word: " harry.potter@hogwarts.edu", Start: 39, End: 65},
+		{EntityGroup: "private_person", Word: " Sherlock Holmes", Start: 10, End: 26},
+		{EntityGroup: "private_email", Word: " sherlock.holmes@scotlandyard.uk", Start: 42, End: 74},
 	}
 	if len(entities) != len(want) {
 		t.Fatalf("got %d entities, want %d: %+v", len(entities), len(want), entities)

@@ -1,12 +1,12 @@
 {
-  "text": "I moved to 42 Privet Drive, Apartment 3B, last month.",
+  "text": "I recently moved to 42 Maple Avenue, Apartment 3B.",
   "entities": [
     {
       "entity_group": "private_address",
-      "word": "42 Privet Drive, Apartment 3B",
-      "start": 11,
-      "end": 40,
-      "score": 0.9995995892418755
+      "word": "42 Maple Avenue, Apartment 3B.",
+      "start": 20,
+      "end": 50,
+      "score": 0.9998173316319784
     }
   ]
 }

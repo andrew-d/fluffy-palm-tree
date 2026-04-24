@@ -2,7 +2,7 @@
 
 These act as golden cases for the pure-Go tokenizer. We pick inputs that
 exercise: ASCII words, punctuation, digits, trailing whitespace, newlines,
-Unicode letters and marks, and the long Harry Potter example.
+Unicode letters and marks, and the long Sherlock Holmes example.
 """
 import json
 from pathlib import Path
@@ -17,7 +17,7 @@ CASES = [
     "",
     "Hello",
     "Hello world",
-    "My name is Harry Potter and my email is harry.potter@hogwarts.edu.",
+    "My name is Sherlock Holmes and my email is sherlock.holmes@scotlandyard.uk.",
     "My name is Alice Smith",
     "Call me at 555-123-4567.",
     "\n\nHello",

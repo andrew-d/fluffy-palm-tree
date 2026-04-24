@@ -37,12 +37,12 @@ func TestAggregateBIOES(t *testing.T) {
 	}{
 		{
 			name:   "B-E pair",
-			text:   "My name is Harry Potter.",
-			tokens: []tokenizer.Token{mkTok(0, 2), mkTok(2, 7), mkTok(7, 10), mkTok(10, 16), mkTok(16, 23), mkTok(23, 24)},
+			text:   "My name is Sherlock Holmes.",
+			tokens: []tokenizer.Token{mkTok(0, 2), mkTok(2, 7), mkTok(7, 10), mkTok(10, 19), mkTok(19, 26), mkTok(26, 27)},
 			labels: []string{"O", "O", "O", "B-private_person", "E-private_person", "O"},
 			scores: []float32{0.9, 0.9, 0.9, 0.8, 1.0, 0.9},
 			want: []wantEntity{
-				{group: "private_person", word: " Harry Potter", start: 10, end: 23, score: 0.9},
+				{group: "private_person", word: " Sherlock Holmes", start: 10, end: 26, score: 0.9},
 			},
 		},
 		{

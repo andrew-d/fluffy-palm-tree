@@ -22,7 +22,7 @@ type Entity struct {
 	// Word is the substring of the input text covered by the span. It is
 	// extracted by character (rune) offsets and therefore includes any
 	// leading whitespace that the tokenizer pre-tokenized into the first
-	// token of the span (e.g. " Harry Potter" for the Harry Potter example).
+	// token of the span (e.g. " Sherlock Holmes" for the Sherlock Holmes example).
 	Word string
 	// Start and End are CHARACTER (rune) offsets into the input text. This
 	// matches the offsets returned by HuggingFace's fast tokenizer and by

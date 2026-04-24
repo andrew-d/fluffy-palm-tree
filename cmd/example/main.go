@@ -15,7 +15,7 @@ func main() {
 	}
 
 	texts := []string{
-		"My name is Harry Potter and my email is harry.potter@hogwarts.edu.",
+		"My name is Sherlock Holmes and my email is sherlock.holmes@scotlandyard.uk.",
 		"My name is Alice Smith",
 		"Call me at 555-123-4567.",
 	}
