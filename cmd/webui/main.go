@@ -15,8 +15,11 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os/signal"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -40,6 +43,7 @@ const (
 type job struct {
 	id       string
 	text     string
+	remoteIP string
 	status   jobStatus
 	entities []privacyfilter.Entity
 	errMsg   string
@@ -69,7 +73,7 @@ func newQueue() *queue {
 	return q
 }
 
-func (q *queue) enqueue(text string) *job {
+func (q *queue) enqueue(text, remoteIP string) *job {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.nextID++
@@ -77,6 +81,7 @@ func (q *queue) enqueue(text string) *job {
 	j := &job{
 		id:         id,
 		text:       text,
+		remoteIP:   remoteIP,
 		status:     statusQueued,
 		enqueuedAt: time.Now(),
 	}
@@ -213,9 +218,21 @@ func handleSubmit(q *queue) http.HandlerFunc {
 			http.Error(w, "text must not be empty", http.StatusBadRequest)
 			return
 		}
-		j := q.enqueue(req.Text)
+		j := q.enqueue(req.Text, clientIP(r))
 		writeJSON(w, http.StatusAccepted, submitResponse{ID: j.id})
 	}
+}
+
+// clientIP returns the host portion of r.RemoteAddr, falling back to the raw
+// value if it's not host:port. Reverse-proxy headers (X-Forwarded-For etc.)
+// are intentionally ignored — trusting them without a proxy allowlist lets any
+// client forge the value.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func handleStatus(q *queue) http.HandlerFunc {
@@ -282,7 +299,36 @@ func runWorker(ctx context.Context, q *queue, model *privacyfilter.Model) {
 		ents, err := model.Classify(j.text)
 		dur := time.Since(start)
 		q.complete(j.id, ents, chars, tokens, dur, err)
+		logJobResult(j, ents, chars, tokens, dur, err)
 	}
+}
+
+// logJobResult prints a single-line summary of a finished job. We log the
+// remote IP, job ID, per-category counts, and throughput — but never any of
+// the input text or matched entity content, since that would defeat the point
+// of the filter.
+func logJobResult(j *job, ents []privacyfilter.Entity, chars, tokens int, dur time.Duration, err error) {
+	if err != nil {
+		log.Printf("job %s error: ip=%s chars=%d tokens=%d err=%v",
+			j.id, j.remoteIP, chars, tokens, err)
+		return
+	}
+	counts := make(map[string]int, len(ents))
+	for _, e := range ents {
+		counts[e.EntityGroup]++
+	}
+	groups := make([]string, 0, len(counts))
+	for g := range counts {
+		groups = append(groups, g)
+	}
+	sort.Strings(groups)
+	var breakdown strings.Builder
+	for _, g := range groups {
+		fmt.Fprintf(&breakdown, " num_%s=%d", g, counts[g])
+	}
+	log.Printf("job %s done: ip=%s entities=%d%s duration=%s chars=%d tokens=%d",
+		j.id, j.remoteIP, len(ents), breakdown.String(),
+		dur.Round(time.Millisecond), chars, tokens)
 }
 
 func main() {
