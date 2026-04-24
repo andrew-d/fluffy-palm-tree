@@ -469,7 +469,7 @@ func MoEExperts(
 		}
 		end := start + reduceChunk
 		if end > T*D {
-			end = T*D
+			end = T * D
 		}
 		rwg.Add(1)
 		go func(start, end int) {

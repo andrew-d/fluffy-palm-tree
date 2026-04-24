@@ -343,8 +343,8 @@ func axpy(alpha float32, x, y []float32) {
 // field; exp(r) is a degree-6 Horner polynomial tuned for minimax over
 // the reduced range (the Cephes/Cody-Waite choice).
 func fastExp16(x archsimd.Float32x16) archsimd.Float32x16 {
-	log2e := archsimd.BroadcastFloat32x16(1.4426950408889634)  // 1/ln2
-	ln2 := archsimd.BroadcastFloat32x16(0.6931471805599453)    // ln2
+	log2e := archsimd.BroadcastFloat32x16(1.4426950408889634) // 1/ln2
+	ln2 := archsimd.BroadcastFloat32x16(0.6931471805599453)   // ln2
 	nRound := x.Mul(log2e).RoundToEvenScaled(0)
 	nInt := nRound.ConvertToInt32()
 	r := x.Sub(nRound.Mul(ln2))
@@ -497,10 +497,10 @@ func dotBatch8(w []float32, xs [8][]float32) [8]float32 {
 	for s := 0; s < 8; s++ {
 		var lanes [16]float32
 		accs[s].Store(&lanes)
-		result[s] = (((lanes[0]+lanes[1])+(lanes[2]+lanes[3]))+
-			((lanes[4]+lanes[5])+(lanes[6]+lanes[7]))) +
-			(((lanes[8]+lanes[9])+(lanes[10]+lanes[11]))+
-				((lanes[12]+lanes[13])+(lanes[14]+lanes[15])))
+		result[s] = (((lanes[0] + lanes[1]) + (lanes[2] + lanes[3])) +
+			((lanes[4] + lanes[5]) + (lanes[6] + lanes[7]))) +
+			(((lanes[8] + lanes[9]) + (lanes[10] + lanes[11])) +
+				((lanes[12] + lanes[13]) + (lanes[14] + lanes[15])))
 	}
 	for ; i < n; i++ {
 		wi := w[i]
@@ -616,8 +616,8 @@ func linearTile4x4(x []float32, W []float32, y []float32, in, out, tOff, oOff in
 	hsum := func(v archsimd.Float32x16) float32 {
 		var l [16]float32
 		v.Store(&l)
-		return (((l[0]+l[1])+(l[2]+l[3]))+((l[4]+l[5])+(l[6]+l[7]))) +
-			(((l[8]+l[9])+(l[10]+l[11]))+((l[12]+l[13])+(l[14]+l[15])))
+		return (((l[0] + l[1]) + (l[2] + l[3])) + ((l[4] + l[5]) + (l[6] + l[7]))) +
+			(((l[8] + l[9]) + (l[10] + l[11])) + ((l[12] + l[13]) + (l[14] + l[15])))
 	}
 	var b0, b1, b2, b3 float32
 	if bias != nil {

@@ -190,11 +190,11 @@ type statusResponse struct {
 	Entities []entityJSON `json:"entities,omitempty"`
 	Error    string       `json:"error,omitempty"`
 	// Timing and throughput, present only when status == done.
-	DurationMs    float64 `json:"duration_ms,omitempty"`
-	Chars         int     `json:"chars,omitempty"`
-	Tokens        int     `json:"tokens,omitempty"`
-	CharsPerSec   float64 `json:"chars_per_sec,omitempty"`
-	TokensPerSec  float64 `json:"tokens_per_sec,omitempty"`
+	DurationMs   float64 `json:"duration_ms,omitempty"`
+	Chars        int     `json:"chars,omitempty"`
+	Tokens       int     `json:"tokens,omitempty"`
+	CharsPerSec  float64 `json:"chars_per_sec,omitempty"`
+	TokensPerSec float64 `json:"tokens_per_sec,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

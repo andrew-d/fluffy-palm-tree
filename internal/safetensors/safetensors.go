@@ -109,20 +109,20 @@ func (t *Tensor) Float32s() []float32 {
 // headerEntry is the shape of each value in the JSON header (excluding the
 // special "__metadata__" key).
 type headerEntry struct {
-	DType       string  `json:"dtype"`
-	Shape       []int   `json:"shape"`
+	DType       string   `json:"dtype"`
+	Shape       []int    `json:"shape"`
 	DataOffsets [2]int64 `json:"data_offsets"`
 }
 
 // Reader provides random access to tensors inside a SafeTensors file.
 type Reader struct {
-	file   *os.File
-	mmap   []byte // full file mapping; nil if we fell back to ReadAt
-	data   []byte // view of the tensor-data region (post-header); only set when mmap'd
-	dataStart int64 // byte offset where the tensor-data block starts
-	dataSize  int64 // size of the tensor-data block
-	tensors map[string]headerEntry
-	names   []string // insertion order (sorted by data_offsets.start for stability)
+	file      *os.File
+	mmap      []byte // full file mapping; nil if we fell back to ReadAt
+	data      []byte // view of the tensor-data region (post-header); only set when mmap'd
+	dataStart int64  // byte offset where the tensor-data block starts
+	dataSize  int64  // size of the tensor-data block
+	tensors   map[string]headerEntry
+	names     []string // insertion order (sorted by data_offsets.start for stability)
 }
 
 // Open opens path and parses its SafeTensors header. The file is memory-mapped
