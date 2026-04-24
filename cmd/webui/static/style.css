@@ -1,0 +1,159 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #fafafa;
+  --muted: #666;
+  --border: #d0d0d0;
+  --accent: #2d5fff;
+
+  --c-private_person:  #ffd6a5;
+  --c-private_email:   #caffbf;
+  --c-private_phone:   #9bf6ff;
+  --c-private_address: #ffadad;
+  --c-private_date:    #bdb2ff;
+  --c-private_url:     #fdffb6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #f0f0f0;
+    --bg: #141414;
+    --muted: #999;
+    --border: #333;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+main {
+  max-width: 760px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+h2 { font-size: 1.05rem; margin: 1.25rem 0 0.5rem; }
+h3 { font-size: 0.95rem; margin: 1rem 0 0.5rem; color: var(--muted); }
+.sub { color: var(--muted); margin: 0 0 1rem; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+button {
+  padding: 0.5rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.status { color: var(--muted); font-size: 0.9rem; }
+.status.error { color: #c00; }
+
+.result { border-top: 1px solid var(--border); padding-top: 0.5rem; }
+
+.output {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.95rem;
+}
+
+.ent {
+  padding: 0.05em 0.2em;
+  border-radius: 4px;
+  cursor: help;
+  position: relative;
+  border-bottom: 2px solid rgba(0,0,0,0.25);
+}
+.ent[data-type="private_person"]  { background: var(--c-private_person); }
+.ent[data-type="private_email"]   { background: var(--c-private_email); }
+.ent[data-type="private_phone"]   { background: var(--c-private_phone); }
+.ent[data-type="private_address"] { background: var(--c-private_address); }
+.ent[data-type="private_date"]    { background: var(--c-private_date); }
+.ent[data-type="private_url"]     { background: var(--c-private_url); }
+.ent { color: #111; }
+
+.ent:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  background: #222;
+  color: #fff;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  font-family: system-ui, sans-serif;
+  font-size: 0.8rem;
+  white-space: pre;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.throughput {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.75rem;
+  row-gap: 0.15rem;
+  margin: 0.75rem 0 0;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.throughput dt { grid-column: 1; }
+.throughput dd { grid-column: 2; margin: 0; color: var(--fg); }
+
+.entities { list-style: none; padding: 0; margin: 0; }
+.entities li {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px dashed var(--border);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9rem;
+}
+.entities .swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  margin-top: 0.3rem;
+  flex-shrink: 0;
+}
+.entities .meta { color: var(--muted); }
+
+.legend-list {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
+}
+.legend-list li { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.legend-list .swatch { width: 0.85rem; height: 0.85rem; border-radius: 3px; }

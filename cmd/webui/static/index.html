@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>privacy-filter demo</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<main>
+  <h1>privacy-filter</h1>
+  <p class="sub">Enter text, click Run. Detected PII is highlighted; hover a span for details.</p>
+
+  <label for="input" class="sr-only">Input text</label>
+  <textarea id="input" rows="6" placeholder="My name is Harry Potter and my email is harry.potter@hogwarts.edu."></textarea>
+
+  <div class="controls">
+    <button id="run" type="button">Run</button>
+    <span id="status" class="status" role="status" aria-live="polite"></span>
+  </div>
+
+  <section id="result" class="result" aria-label="Result" hidden>
+    <h2>Result</h2>
+    <div id="output" class="output"></div>
+    <dl id="throughput" class="throughput" aria-label="Throughput"></dl>
+    <h3>Detected entities</h3>
+    <ul id="entities" class="entities"></ul>
+  </section>
+
+  <section class="legend" aria-label="Legend">
+    <h2>Legend</h2>
+    <ul id="legend" class="legend-list"></ul>
+  </section>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>
